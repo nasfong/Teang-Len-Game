@@ -1,0 +1,193 @@
+@import 'tailwindcss';
+
+/* Landscape phones are SHORT (viewport height ~375–430px), so the layout is sized
+   compact by default (mobile-first) and `tall:` restores the roomier desktop sizes
+   only when there's vertical space. Height — not width — is the right signal: a
+   landscape phone is wide but short, so a width breakpoint can't tell it from a
+   desktop. Desktops/tablets clear 600px tall and get the full size unchanged. */
+@custom-variant tall (@media (min-height: 600px));
+
+/* Self-hosted display font — no external CDN. Lilita One ships weight 400 only. */
+@font-face {
+  font-family: 'Lilita One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/lilita-one-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lilita One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/lilita-one-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Register as a Tailwind theme token → generates the `font-display` utility,
+   usable anywhere in the app (buttons, titles, etc.). */
+@theme {
+  --font-display: 'Lilita One', 'Fredoka', 'Comic Sans MS', cursive;
+
+  /* Springy pop-in for message bubbles + modal panels → `animate-pop-in`. */
+  --animate-pop-in: pop-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Plain fade for modal backdrops → `animate-fade-in`. Shorter than the pop so
+     the dim lands first and the panel springs in over it. */
+  --animate-fade-in: fade-in 180ms ease-out;
+
+  /* A played combo dropping onto the felt → `animate-drop-in`. It flies in from
+     the direction of the player who played it — the start offset comes from the
+     element's own --drop-x / --drop-y (set by TrickPile per seat), so ONE token
+     serves every direction. `both` keeps the card hidden through its stagger
+     delay and holds the landed state. The bezier overshoots a hair for a slam. */
+  --animate-drop-in: drop-in 360ms cubic-bezier(0.22, 1.4, 0.4, 1) both;
+
+  /* Turn countdown ring → `animate-countdown`. Sets the name/easing/fill only;
+     the DURATION is set per element via an inline `animation-duration` (see
+     TurnTimer). A `var(--turn-duration)` here would resolve against :root, where
+     it's unset, and freeze at the fallback — so the length must come from the
+     element, not this token. The ring drains itself in CSS — no React re-render. */
+  --animate-countdown: countdown 20s linear forwards;
+}
+
+/* Every `font-display` run is outlined by default — the cartoon "inked" look, so
+   you never have to remember to add it. Components only name the ink:
+     [--stroke-color:#2f5e0d]   different ink (e.g. match a button variant)
+     [--stroke-width:0]         opt out (small dark-on-light copy)
+     [--stroke-width:3px]       override the scaling if a spot needs it
+
+   Width is in `em` so the outline scales with the text instead of going blobby
+   on small copy: 0.125em on a 32px label = 4px, on 14px copy = 1.75px.
+
+   NOTE: the stroke is CENTRED on the glyph edge and paint-order paints the fill
+   back over its inner half, so only HALF the width shows. 0.125em on the 32px
+   button label = a 2px outline, matching the original 2px text-shadow outline.
+
+   Uses text-stroke rather than a multi-shadow outline so `text-shadow` stays
+   free for drop shadows. */
+@layer base {
+  .font-display {
+    paint-order: stroke;
+    /* longhands, not the `-webkit-text-stroke` shorthand — var() substitution
+       into that legacy shorthand is unreliable and drops the stroke entirely */
+    -webkit-text-stroke-width: var(--stroke-width, 4px);
+    -webkit-text-stroke-color: var(--stroke-color, #00376b);
+  }
+
+  /* This game is played on phones, so touch is the primary input, not a fallback.
+     Two UA defaults fight that on anything you press:
+
+     touch-action: manipulation   stops double-tap-to-zoom ON THIS ELEMENT. Not
+                                  about the old 300ms tap delay — index.html has
+                                  `viewport width=device-width`, which already
+                                  retired that on iOS 9.3+ and Chrome. The real
+                                  win is a card game's fast repeat taps (spamming
+                                  an emote, tapping through a hand) otherwise read
+                                  as a double-tap and zoom the board.
+     user-select                  a press held a beat too long starts selecting
+                                  the label text and pops a caret / context menu
+                                  mid-game.
+
+     NOT here: -webkit-tap-highlight-color. Tailwind v4's preflight already sets
+     it to transparent on `html,:host` and the property inherits, so repeating it
+     is dead weight. (Verified in the built CSS, not assumed.)
+
+     A base reset, not a component style — it corrects the UA, it doesn't decorate
+     anything. Copying a component out without this degrades gracefully (a stray
+     zoom, a text selection), unlike the font-display outline. */
+  button,
+  [role='button'],
+  [role='switch'],
+  a {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) translateY(4px);
+  }
+  60% {
+    transform: scale(1.04) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Card flying onto the table. Starts offset toward its player's seat (the vars,
+   defaulted so a bare use still drops from just below) and a touch enlarged, then
+   settles to its resting spot. Translate/scale only — the card's jitter rotation
+   lives on a separate inner element, so this can't clobber it. */
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--drop-x, 0), var(--drop-y, 28px)) scale(1.16);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* Drains the ring. `pathLength="100"` on the circle normalises its length, so the
+   offset runs 0 → 100 regardless of the radius — no circumference maths. */
+@keyframes countdown {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+
+/* Phone icon miming the turn-to-landscape gesture on the rotate-your-device gate:
+   it holds upright, tips a quarter-turn to landscape, holds, then returns — a
+   looping hint rather than a single flip. */
+@keyframes rotate-hint {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  50%,
+  75% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* NOTE: `countdown` is deliberately absent here. pop-in and fade-in are
+   decoration and can collapse to nothing, but the countdown ring IS the
+   information — flattening it to 1ms would leave a player with a drained ring
+   and no idea how long they have. Reduced motion means less gratuitous movement,
+   not less meaning. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animate-pop-in: pop-in 1ms linear;
+    --animate-fade-in: fade-in 1ms linear;
+    /* The flight collapses to a plain, still fade — the card still appears, it
+       just doesn't travel. `both` preserves the hidden-through-delay behaviour. */
+    --animate-drop-in: fade-in 120ms ease-out both;
+  }
+}

@@ -1,0 +1,31 @@
+# Rebuilt inside the image — never copy the host's (arm64) modules or stale build.
+node_modules
+**/node_modules
+dist
+dist-ssr
+
+# The backend is built as its own image (backend/Dockerfile); keep it out of the
+# web build context.
+backend
+
+# Secrets / local env must NOT be baked into the client bundle.
+.env
+.env.*
+*.local
+
+# VCS, tooling, docs — not needed to build the SPA.
+.git
+.gitignore
+.dockerignore
+Dockerfile
+Makefile
+*.md
+.oxlintrc.json
+
+# Editor / OS cruft.
+.vscode
+.idea
+.DS_Store
+*.log
+
+# nginx.conf is intentionally NOT ignored — the web Dockerfile COPYs it.

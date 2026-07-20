@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Favicons. Modern browsers prefer the SVG; the 32/16 PNGs are the fallback
+         for anything that can't render an SVG icon (and for the tab at exact px).
+         apple-touch-icon (below, near the PWA meta) covers the iOS home screen. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <!-- viewport-fit=cover lets the layout use env(safe-area-inset-*) so the UI
+         clears landscape notches; zoom is locked because this is a game, not a
+         document — pinch-zoom mid-hand is only ever an accident. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <title>Teang Len</title>
+    <!-- Installable PWA: "Add to Home Screen" launches WITHOUT browser chrome
+         (display: fullscreen) and locked to landscape, so the game runs edge-to-edge
+         like a native app. A plain browser tab can't hide its own address bar — this
+         is the only way to the chromeless experience. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2B7FC9" />
+    <!-- iOS Safari uses its own flags (it ignores the manifest's display mode). -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Teang Len" />
+    <!-- iOS home-screen icon must be a PNG (Safari ignores SVG here). -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Boot loader — inlined so it paints on the FIRST frame, before any JS or the
+         app bundle downloads. React replaces it (inside #root) with the real
+         progress preloader once the small entry chunk has loaded. -->
+    <style>
+      #boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: linear-gradient(to bottom, #2b7fc9, #0f3358);
+        font-family: 'Lilita One', system-ui, -apple-system, sans-serif;
+        text-align: center;
+      }
+      #boot-loader .brand {
+        color: #fff;
+        font-size: clamp(2.5rem, 9vw, 3.5rem);
+        line-height: 1.05;
+        letter-spacing: 0.5px;
+        text-shadow: 0 4px 6px rgba(0, 0, 0, 0.45);
+      }
+      #boot-loader .tag {
+        color: #ffd27a;
+        font-size: clamp(1.2rem, 5vw, 1.6rem);
+        text-shadow: 0 3px 5px rgba(0, 0, 0, 0.4);
+      }
+      #boot-loader .bar {
+        width: min(280px, 70vw);
+        height: 14px;
+        border-radius: 9999px;
+        background: rgba(0, 0, 0, 0.28);
+        overflow: hidden;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+      }
+      #boot-loader .bar::before {
+        content: '';
+        display: block;
+        height: 100%;
+        width: 40%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #5ee07a, #39b85b);
+        animation: boot-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes boot-slide {
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(320%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-loader .bar::before { animation: none; width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot-loader">
+        <div>
+          <div class="brand">Teang Len</div>
+          <div class="tag">Game</div>
+        </div>
+        <div class="bar"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+# Rebuilt inside the image — never copy the host's (arm64) modules or stale build.
+node_modules
+dist
+
+# Secrets / local env must not enter the build context.
+.env
+.env.*
+
+# Not needed to build/run.
+*.log
+Dockerfile
+.dockerignore
