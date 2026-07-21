@@ -13,6 +13,7 @@ import {
   broadcastRoomUpdate,
 } from './emit'
 import { parsePayload } from './parsePayload'
+import { clearRoomAfkTimers } from './afkTimers'
 import { clearTurnTimer, startTurnTimer } from './turnTimer'
 
 // game:start / game:play / game:skip (spec §6.2, §7, §9). gameState is opaque here.
@@ -33,8 +34,11 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       return
     }
     const room = result.data
+    // A match is starting: cancel pending AFK evictions. Nobody is removed mid-hand;
+    // endGame() sweeps anyone who never reconnected.
+    clearRoomAfkTimers(room.roomId)
     broadcastRoomUpdate(io, room)
-    broadcastLobbyUpdate(io) // room left 'waiting' — drop it from the lobby list
+    broadcastLobbyUpdate(io) // status changed — refresh the lobby list
     const turnStartedAt = startTurnTimer(io, room.roomId, durationMs)
     broadcastGameUpdate(io, room.roomId, room.gameState, room.version, data.playerId, turnStartedAt ?? undefined)
   })
@@ -68,6 +72,9 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       broadcastGameEnd(io, room.roomId, rankings, room.gameState)
       const reset = roomService.endGame(room.roomId)
       if (reset) broadcastRoomUpdate(io, reset)
+      // endGame may have removed players (queued leaves, never-reconnected) or
+      // deleted the room outright — the lobby's seat counts are now stale.
+      broadcastLobbyUpdate(io)
     }
   })
 

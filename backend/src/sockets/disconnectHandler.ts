@@ -1,8 +1,10 @@
 import type { Server, Socket } from 'socket.io'
+import { config } from '../config'
 import { DISCONNECT } from '../types/events'
 import { findRoomBySocketId, getRoom } from '../rooms/roomStore'
 import { markDisconnected } from '../services/roomService'
 import { removeSpectatorSocket } from '../rooms/spectators'
+import { armAfkRemoval } from './afkTimers'
 import { broadcastPlayerDisconnected, broadcastRoomUpdate } from './emit'
 
 // Socket dropped → mark the player offline (seat retained) and broadcast (spec §10).
@@ -15,6 +17,10 @@ export function registerDisconnectHandler(io: Server, socket: Socket): void {
     if (room) {
       const result = markDisconnected(room, socket.id)
       if (!result) return
+      // Start the eviction clock. It only fires if the room ISN'T mid-match and they
+      // haven't come back — a live match is never interrupted (endGame sweeps
+      // players who never reconnected).
+      armAfkRemoval(io, room.roomId, result.playerId, config.afk.disconnectGraceMs)
       broadcastPlayerDisconnected(io, room.roomId, result.playerId)
       broadcastRoomUpdate(io, result.room)
       return

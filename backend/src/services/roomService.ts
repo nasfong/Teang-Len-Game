@@ -9,10 +9,25 @@ import { deleteRoom, getRoom, listRooms, saveRoom } from '../rooms/roomStore'
 
 const participant = (room: Room, playerId: string) => room.players.find((p) => p.playerId === playerId)
 
-/** New host = original host if still present, else the first remaining player. */
+/**
+ * Keep a usable host. The host is the only client that fires the next deal, so a
+ * host who is gone OR merely offline deadlocks the room — everyone sits watching a
+ * countdown that never starts. Reassign when the current host has left or is
+ * disconnected.
+ *
+ * Picks the connected player in the LOWEST seat, not `players[0]`: the array order
+ * follows join/leave churn, so it isn't stable across clients, whereas seat order
+ * is the same everywhere. Falls back to the lowest seat outright if nobody is
+ * connected (an all-offline room is about to be cleaned up anyway).
+ */
 function reassignHostIfNeeded(room: Room): void {
-  if (room.players.some((p) => p.playerId === room.hostPlayerId)) return
-  if (room.players.length > 0) room.hostPlayerId = room.players[0].playerId
+  if (room.players.length === 0) return
+  const host = room.players.find((p) => p.playerId === room.hostPlayerId)
+  if (host && host.socketId !== null) return // present and reachable
+
+  const bySeat = [...room.players].sort((a, b) => (a.seatIndex ?? 0) - (b.seatIndex ?? 0))
+  const next = bySeat.find((p) => p.socketId !== null) ?? bySeat[0]
+  room.hostPlayerId = next.playerId
 }
 
 // ── REST-facing ────────────────────────────────────────────────────────────
@@ -20,9 +35,16 @@ function reassignHostIfNeeded(room: Room): void {
 export function create(
   hostPlayerId: string,
   hostName: string,
-  input: { name: string; betCoin: number; maxPlayers: number },
+  input: { name: string; gameId?: string; betCoin: number; maxPlayers: number },
 ): ServiceResult<Room> {
-  const room = createRoom({ hostPlayerId, hostName, name: input.name, betCoin: input.betCoin, maxPlayers: input.maxPlayers })
+  const room = createRoom({
+    hostPlayerId,
+    hostName,
+    name: input.name,
+    gameId: input.gameId,
+    betCoin: input.betCoin,
+    maxPlayers: input.maxPlayers,
+  })
   saveRoom(room)
   return ok(room)
 }
@@ -56,6 +78,9 @@ export function leave(roomId: string, playerId: string): ServiceResult<Room | nu
   const room = getRoom(roomId)
   if (!room) return fail('Room not found', 404)
   room.players = room.players.filter((p) => p.playerId !== playerId)
+  // Drop any queued leave for them too — otherwise the id outlives the player and
+  // rides along in every snapshot as a phantom "leaving" marker.
+  room.pendingLeavePlayerIds = room.pendingLeavePlayerIds.filter((id) => id !== playerId)
   if (room.players.length === 0) {
     deleteRoom(roomId)
     return ok(null)
@@ -177,12 +202,24 @@ export function markPlayerFinished(roomId: string, playerId: string): ServiceRes
   return ok({ room, rank })
 }
 
-/** After game:end — apply queued leaves, delete if empty, else reset to waiting. */
+/**
+ * After game:end — the one safe moment to remove people, since no hand is in
+ * progress. Drops BOTH:
+ *  - queued leaves ("Leave after match": they stayed for the hand, now they go), and
+ *  - anyone still disconnected, i.e. they dropped mid-match and never came back.
+ *    Mid-match they kept their seat so the game could finish; this is where they're
+ *    finally cleared, never during play.
+ * Then delete the room if it emptied, else reset it to waiting for the next deal.
+ */
 export function endGame(roomId: string): Room | null {
   const room = getRoom(roomId)
   if (!room) return null
-  if (room.pendingLeavePlayerIds.length > 0) {
-    room.players = room.players.filter((p) => !room.pendingLeavePlayerIds.includes(p.playerId))
+  const drop = new Set(room.pendingLeavePlayerIds)
+  for (const p of room.players) {
+    if (p.socketId === null) drop.add(p.playerId)
+  }
+  if (drop.size > 0) {
+    room.players = room.players.filter((p) => !drop.has(p.playerId))
   }
   if (room.players.length === 0) {
     deleteRoom(roomId)

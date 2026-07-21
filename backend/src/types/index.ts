@@ -1,6 +1,8 @@
 // Domain types (spec §4). `gameState` is `unknown` at every layer — the backend
 // stores and rebroadcasts it but never reads its fields.
 
+import type { GameRules } from '../config/rules'
+
 export type PlayerStatus = 'waiting' | 'ready' | 'playing' | 'finished' | 'disconnected'
 
 export interface Player {
@@ -18,6 +20,7 @@ export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'finished'
 export interface Room {
   roomId: string
   name: string
+  gameId: string // which card game (see config/games.ts) — the server never reads its rules
   hostPlayerId: string
   betCoin: number // stake per seat (0 = free table)
   players: Player[]
@@ -30,6 +33,7 @@ export interface Room {
   turnStartedAt: number | null
   turnDurationMs: number
   pendingLeavePlayerIds: string[]
+  rules: GameRules // server-owned rule variation, applied by the dealing client
 }
 
 // Public projections — the ONLY shapes exposed to clients. Never leak socketId
@@ -46,6 +50,7 @@ export interface PlayerSnapshot {
 export interface RoomSnapshot {
   roomId: string
   name: string
+  gameId: string // the client loads this game's module to render the room
   hostPlayerId: string
   betCoin: number
   players: PlayerSnapshot[]
@@ -59,6 +64,7 @@ export interface RoomSnapshot {
   turnDurationMs: number
   pendingLeavePlayerIds: string[]
   spectatorCount: number // watchers with no seat (live count only, never socket ids)
+  rules: GameRules // clients read this to deal the next match the same way
 }
 
 // Identity + wallet

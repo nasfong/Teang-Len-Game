@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { config } from '../config'
+import { getGame } from '../config/games'
 import type { Player, PlayerSnapshot, Room, RoomSnapshot } from '../types'
 import { spectatorCount } from './spectators'
 import { getWallet } from '../modules/wallet/walletService'
@@ -21,16 +21,21 @@ export function createParticipant(input: { playerId: string; name: string; socke
 
 export function createRoom(input: {
   name: string
+  gameId?: string
   hostPlayerId: string
   hostName: string
   betCoin: number
   maxPlayers: number
 }): Room {
   const now = Date.now()
+  // The catalog is the authority on seat count, turn length and rule variation —
+  // the request only chooses WHICH game, never its limits.
+  const game = getGame(input.gameId)
   const host = createParticipant({ playerId: input.hostPlayerId, name: input.hostName, seatIndex: 0 })
   return {
     roomId: randomUUID(),
     name: input.name,
+    gameId: game.id,
     hostPlayerId: input.hostPlayerId,
     betCoin: input.betCoin,
     players: [host],
@@ -39,10 +44,11 @@ export function createRoom(input: {
     version: 0,
     createdAt: now,
     updatedAt: now,
-    maxPlayers: input.maxPlayers,
+    maxPlayers: Math.min(Math.max(input.maxPlayers, game.minPlayers), game.maxPlayers),
     turnStartedAt: null,
-    turnDurationMs: config.defaultTurnDurationMs,
+    turnDurationMs: game.turnDurationMs,
     pendingLeavePlayerIds: [],
+    rules: game.rules,
   }
 }
 
@@ -70,6 +76,7 @@ export function toRoomSnapshot(room: Room): RoomSnapshot {
   return {
     roomId: room.roomId,
     name: room.name,
+    gameId: room.gameId,
     hostPlayerId: room.hostPlayerId,
     betCoin: room.betCoin,
     players: room.players.map(toPlayerSnapshot),
@@ -83,6 +90,7 @@ export function toRoomSnapshot(room: Room): RoomSnapshot {
     turnDurationMs: room.turnDurationMs,
     pendingLeavePlayerIds: room.pendingLeavePlayerIds,
     spectatorCount: spectatorCount(room.roomId),
+    rules: room.rules,
   }
 }
 

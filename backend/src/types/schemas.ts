@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { gameIds, DEFAULT_GAME_ID } from '../config/games'
 
 // Zod schemas for REST bodies/params and socket payloads (spec §5.1, §6.2).
 
@@ -16,8 +17,13 @@ export const loginSchema = z.object({
 
 export const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(24),
+  // Which game to host. Validated against the catalog so an unknown id is a 400
+  // rather than a room nobody can render; the seat count it implies is applied
+  // server-side in createRoom, not taken from the request.
+  gameId: z.enum(gameIds as [string, ...string[]]).default(DEFAULT_GAME_ID),
   betCoin: z.number().int().min(0),
-  maxPlayers: z.number().int().min(2).max(4).default(4),
+  // Outer bound only — createRoom clamps this into the CHOSEN game's range.
+  maxPlayers: z.number().int().min(2).max(8).default(4),
 })
 
 export const roomIdParamSchema = z.object({

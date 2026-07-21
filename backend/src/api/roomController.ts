@@ -33,7 +33,12 @@ export function getRoomHandler(req: Request, res: Response): void {
 
 export function createRoomHandler(req: Request, res: Response): void {
   const userId = req.userId as string
-  const { name, betCoin, maxPlayers } = req.body as { name: string; betCoin: number; maxPlayers: number }
+  const { name, gameId, betCoin, maxPlayers } = req.body as {
+    name: string
+    gameId: string
+    betCoin: number
+    maxPlayers: number
+  }
 
   // Must be able to cover one full bet (their worst-case loss) — but nothing is
   // charged now; coins only move when the game settles.
@@ -47,7 +52,7 @@ export function createRoomHandler(req: Request, res: Response): void {
     return
   }
 
-  const result = roomService.create(userId, user.displayName, { name, betCoin, maxPlayers })
+  const result = roomService.create(userId, user.displayName, { name, gameId, betCoin, maxPlayers })
   if (!result.ok) {
     sendFail(res, result.error, result.code)
     return
