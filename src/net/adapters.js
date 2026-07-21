@@ -1,6 +1,8 @@
 // Adapters — map the backend's wire shapes onto our component props, so screens
 // stay presentational and the server contract can shift without touching them.
 
+import { catalogue } from '../games/index.js'
+
 // Shop product (server, typed 'purchase' | 'ads') → Shop pack props. The API is
 // data-only; presentation (icon, layout, colours, CTA) is applied here per type —
 // 'ads' becomes the full-width rewarded-video banner (kind 'ad', routed to
@@ -28,6 +30,9 @@ export function roomSnapshotToCard(room) {
   return {
     id: room.roomId,
     name: room.name,
+    // Resolved to a display name here rather than in RoomCard: the card is a
+    // portable component and must not know the game catalogue exists.
+    game: catalogue.find((g) => g.id === room.gameId)?.name ?? null,
     betCoin: room.betCoin,
     maxPlayers: room.maxPlayers,
     status: room.status, // 'waiting' | 'playing' — the card shows a live badge + Join/Watch

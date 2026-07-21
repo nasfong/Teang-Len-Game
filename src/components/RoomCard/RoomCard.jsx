@@ -41,6 +41,7 @@ const STAT = [
 
 export default function RoomCard({
   name = 'Room',
+  game = null, // which card game, already resolved to a display name by the caller
   betCoin = 0,
   maxPlayers = 4,
   players = [],
@@ -85,7 +86,10 @@ export default function RoomCard({
       {/* Stake + player count — two recessed pills. The seat count goes amber
           when the room is one-from-full and red when full, so a glance down a
           lobby list picks out the rooms worth joining. */}
-      <div className="flex items-center justify-center gap-2.5">
+      <div className="flex flex-wrap items-center justify-center gap-2.5">
+        {/* Which game. Only rendered when the caller names one, so a single-game
+            lobby looks exactly as it did before. */}
+        {game && <span className={`${STAT} text-[#9FE0FF]`}>{game}</span>}
         <span className={`${STAT} text-[#FFD27A]`}><CoinIcon /> {betCoin.toLocaleString()}</span>
         <span className={`${STAT} ${full ? 'text-[#FF9B8A]' : filled === maxPlayers - 1 ? 'text-[#FFD27A]' : 'text-white'}`}>
           <span aria-hidden className="text-[13px] leading-none">👤</span> {filled}/{maxPlayers}

@@ -24,11 +24,30 @@ const SUITS = {
 
 // Real cards are 2.5×3.5in — every box below holds that 1:1.4 ratio, so a card
 // never looks subtly wrong next to a real one.
+//
+// EVERY TYPE SIZE HERE SCALES WITH THE BOX, and that is the whole point of the
+// table: the card is drawn at four widths and only the md tuning was ever eyeballed,
+// so the rest are derived from it as a fraction of the card's width. Hard-coding a
+// size on the spans instead has now broken the small cards twice — a 40px suit mark
+// on the 48px table card, a 20px rank on the 32px reveal card. If a size looks wrong,
+// retune the ROW, don't override it at the call site.
+//
+//   rank  ~0.31× width — the thing a player actually reads to identify a card
+//   glyph ~0.19× width — the small suit under the rank
+//   mark  ~0.62× width — the big corner suit (position travels with it)
+//
+// `corner` places the index. md/lg let the rank ride 4px proud of the top edge
+// (there's no overflow clip, and it reads well on a big hand card); xs/sm keep it
+// inside, where 4px is a tenth of the card and just looks broken.
+// (All literal strings in a lookup, so Tailwind still sees the classes.)
 const SIZES = {
-  xs: { box: 'h-11 w-8', radius: 'rounded', index: 'text-[8px]', pip: 'text-lg', emblem: 'text-[10px]', lift: '-translate-y-2' }, // 32px — an opponent's face-down card
-  sm: { box: 'h-17 w-12', radius: 'rounded-md', index: 'text-[11px]', pip: 'text-2xl', emblem: 'text-sm', lift: '-translate-y-2.5' },
-  md: { box: 'h-22 w-16', radius: 'rounded-lg', index: 'text-sm', pip: 'text-4xl', emblem: 'text-lg', lift: '-translate-y-4' },
-  lg: { box: 'h-28 w-20', radius: 'rounded-xl', index: 'text-base', pip: 'text-5xl', emblem: 'text-xl', lift: '-translate-y-5' },
+  // 32px — an opponent's face-down card, and the end-of-match reveal
+  xs: { box: 'h-11 w-8', radius: 'rounded', rank: 'text-[11px]', glyph: 'text-[7px]', corner: 'top-0 left-0.5', mark: 'text-[20px] right-0.5 bottom-0', emblem: 'text-[10px]', lift: '-translate-y-2' },
+  // 48px — the trick pile in the middle of the table
+  sm: { box: 'h-17 w-12', radius: 'rounded-md', rank: 'text-[17px]', glyph: 'text-[10px]', corner: 'top-0 left-1', mark: 'text-[30px] right-1 bottom-0', emblem: 'text-sm', lift: '-translate-y-2.5' },
+  // 64px — your own hand
+  md: { box: 'h-22 w-16', radius: 'rounded-lg', rank: 'text-2xl', glyph: 'text-[14px]', corner: '-top-1 left-1', mark: 'text-[40px] right-1 bottom-0.5', emblem: 'text-lg', lift: '-translate-y-4' },
+  lg: { box: 'h-28 w-20', radius: 'rounded-xl', rank: 'text-[30px]', glyph: 'text-[18px]', corner: '-top-1 left-1.5', mark: 'text-[50px] right-1.5 bottom-0.5', emblem: 'text-xl', lift: '-translate-y-5' },
 }
 
 // Lilita One is the game's voice, but the global outline would ink a navy edge
@@ -37,20 +56,37 @@ const FACE_TEXT = 'font-display leading-none [--stroke-width:0]'
 
 // Shared by both faces: the card outline, white fill on the front is set at the
 // call site. Kept as one string so the two sides can't drift out of step.
-const FACE_BASE = 'absolute inset-0 border-[3px] border-[#1B2733] [backface-visibility:hidden]'
+const FACE_BASE = 'absolute inset-0 border-[2px] border-[#1B2733] [backface-visibility:hidden]'
 
-/** Corner index — rank stacked over its suit. Repeated upside-down bottom-right,
- *  the way a real card reads from either end. */
-function Index({ rank, suit, size, corner }) {
+/** Corner index — rank stacked over its suit, top-left. */
+function Index({ rank, suit, size }) {
   return (
-    <span
-      className={`absolute flex flex-col items-center ${FACE_TEXT} ${size.index} ${suit.color} ${
-        corner === 'top' ? 'top-0.5 left-1' : 'right-1 bottom-0.5 rotate-180'
-      }`}
-    >
-      <span>{rank}</span>
-      <span className="-mt-px">{suit.glyph}</span>
+    <span className={`absolute flex flex-col items-center ${FACE_TEXT} ${suit.color} ${size.corner}`}>
+      <span className={size.rank}>{rank}</span>
+      <span className={`${size.glyph} -mt-px`}>{suit.glyph}</span>
     </span>
+  )
+}
+
+/** Front face — the white side. ONE index top-left, and a big suit mark filling the
+ *  bottom-right corner. Not a traditional two-index card: a hand is fanned so only a
+ *  narrow left strip of each card shows, and the index alone identifies it; the mark
+ *  is what makes the card you've LIFTED (or that's sitting on the table, unoccluded)
+ *  readable in a glance from across the felt. The mirrored bottom index a paper deck
+ *  carries is dead weight here — nothing ever shows this card upside-down.
+ *
+ *  Its own component so the two faces are SYMMETRIC — `<Front/>` and `<Back/>` —
+ *  rather than one component and a loose block of JSX. That keeps the flip layer
+ *  below readable as "front here, back there", and means the face's contents can
+ *  change without touching the card's 3D plumbing. */
+function Front({ rank, suit, size }) {
+  return (
+    <>
+      <Index rank={rank} suit={suit} size={size} />
+      {/* Size AND position both come from `size.mark` — a fixed px size looked right
+          on the 64px hand card and swallowed the 48px table card whole. */}
+      <span className={`absolute ${size.mark} ${FACE_TEXT} ${suit.color}`}>{suit.glyph}</span>
+    </>
   )
 }
 
@@ -102,18 +138,25 @@ export default function PlayingCard({
     <Tag
       {...(interactive ? { type: 'button', onClick, disabled } : {})}
       aria-label={faceDown ? 'Face-down card' : `${rank} of ${su.name}`}
-      // The button is ONLY the hit area + layout box — it deliberately never
-      // moves. A still pointer target is what kills the hover flicker: when the
-      // card itself lifted, it slid out from under the cursor, lost :hover, fell
-      // back, and re-triggered — a jitter mouse users feel. All motion lives on the
-      // inner lift layer and is driven by group-hover, so the target stays put.
-      className={`group relative block shrink-0 ${s.box} ${s.radius} ${
-        disabled ? 'opacity-45' : interactive ? 'cursor-pointer' : ''
-      } focus:outline-none ${className}`}
+      // The button is the hit area + layout box. HOVER motion never lives here: a
+      // target that moves under the cursor loses :hover, falls back and re-triggers
+      // — a jitter mouse users feel. That's why the hover scale stays on the inner
+      // layer.
+      //
+      // The SELECTION lift is different and DOES belong here. It's driven by state,
+      // not by pointer position, so it can't feed back into a hover loop — and while
+      // it sat on the inner layer only, a selected card floated 16px above a hit box
+      // that hadn't moved. On a phone you aim at what you SEE, so taps landed in the
+      // gap or on the neighbouring card: the "double tap / selects the wrong card"
+      // problem. Transform doesn't affect layout, so the fan doesn't reflow.
+      className={`group relative block shrink-0 ${s.box} ${s.radius} transition-transform duration-150 ease-[cubic-bezier(0.34,1.4,0.64,1)] ${
+        selected ? s.lift : ''
+      } ${disabled ? 'opacity-45' : interactive ? 'cursor-pointer' : ''} focus:outline-none ${className}`}
     >
       {/* Lift layer — the part that MOVES. Hover pops it up a little and scales it
-          a touch; selection raises it further and rings it gold; a press dips it.
-          The shadow and ring live here so they travel with the lifted card.
+          a touch; selection raises it further and golds its edge; a press dips it.
+          The shadow and the selection outline live here so they travel with the
+          lifted card.
           `perspective` sits here because it must wrap the flip layer it gives depth
           to. hover/selected drive `scale` + `translate` (separate CSS props in v4,
           so they compose), and the flip's rotateY is on the child below — three
@@ -122,11 +165,20 @@ export default function PlayingCard({
         className={`relative size-full ${s.radius} perspective-[700px] transition-[transform,box-shadow] duration-150 ease-[cubic-bezier(0.34,1.4,0.64,1)] ${
           // hover lift is skipped while selected so the two don't fight over the
           // raised position — a selected card just sits proud on its own.
+          // The gold marker is an OUTLINE with a negative offset, not a ring. A ring
+          // is a box-shadow drawn OUTSIDE the box, so a selected card swelled 3px on
+          // every edge and lapped its neighbours in the fan. `-outline-offset-3`
+          // draws those 3px INSIDE the card's own footprint instead, so selecting
+          // changes nothing about the card's size — only its edge colour. Outlines
+          // paint on top of descendants (CSS 2.1 painting order), so it lands over
+          // the face's dark border rather than behind it.
+          // NOTE: the lift itself is on the BUTTON (see above) so the hit area
+          // travels with it — only the scale/shadow/outline stay here.
           selected
-            ? `${s.lift} scale-[1.04] shadow-[0_10px_16px_rgba(0,0,0,0.45)] ring-3 ring-[#FFD27A]`
+            ? `scale-[1.04] shadow-[0_10px_16px_rgba(0,0,0,0.45)] outline-3 -outline-offset-3 outline-[#FFD27A]`
             : 'shadow-[0_3px_7px_rgba(0,0,0,0.4)]'
-        } ${interactive && !selected && !disabled ? 'group-hover:scale-[1.05]' : ''} ${
-          interactive && !disabled ? 'group-active:scale-[0.97]' : ''
+        } ${interactive && !selected && !disabled ? '' : ''} ${
+          interactive && !disabled ? '' : ''
         } group-focus-visible:ring-3 group-focus-visible:ring-white`}
       >
         {/* The turning layer. preserve-3d keeps both faces in their own planes so
@@ -144,11 +196,7 @@ export default function PlayingCard({
           {/* Front face — at rotateY(0). backface-hidden means it vanishes once the
               card turns past 90°, revealing the back behind it. */}
           <div className={`${FACE_BASE} bg-white ${s.radius}`}>
-            <Index rank={rank} suit={su} size={s} corner="top" />
-            <span className={`absolute inset-0 flex items-center justify-center ${FACE_TEXT} ${s.pip} ${su.color}`}>
-              {su.glyph}
-            </span>
-            <Index rank={rank} suit={su} size={s} corner="bottom" />
+            <Front rank={rank} suit={su} size={s} />
           </div>
 
           {/* Back face — pre-rotated 180° so it reads upright once the whole layer

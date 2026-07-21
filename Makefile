@@ -21,6 +21,11 @@ PLATFORM     ?= linux/amd64
 # deployed API origin — the web build fails if this is left unset/empty.
 VITE_API_URL ?= https://teang-len-api.nasfong.com
 
+# Testing builds only: `true` auto-registers a throw-away account on first visit
+# so the site opens straight on Home. Keep `false` for production images, e.g.
+#   make push-web TAG=testing VITE_API_URL=https://api-test.example.com VITE_AUTO_GUEST=true
+VITE_AUTO_GUEST ?= false
+
 BUILDX = docker buildx build --platform $(PLATFORM)
 
 .PHONY: build build-web build-api push push-web push-api print
@@ -36,6 +41,7 @@ build-api:
 build-web:
 	$(BUILDX) --load \
 	  --build-arg VITE_API_URL=$(VITE_API_URL) \
+	  --build-arg VITE_AUTO_GUEST=$(VITE_AUTO_GUEST) \
 	  -t $(WEB_IMAGE):$(TAG) -t $(WEB_IMAGE):latest \
 	  -f Dockerfile .
 
@@ -50,10 +56,11 @@ push-api:
 push-web:
 	$(BUILDX) --push \
 	  --build-arg VITE_API_URL=$(VITE_API_URL) \
+	  --build-arg VITE_AUTO_GUEST=$(VITE_AUTO_GUEST) \
 	  -t $(WEB_IMAGE):$(TAG) -t $(WEB_IMAGE):latest \
 	  -f Dockerfile .
 
 print: ## Show the resolved image tags
-	@echo "web: $(WEB_IMAGE):$(TAG)  (VITE_API_URL=$(VITE_API_URL))"
+	@echo "web: $(WEB_IMAGE):$(TAG)  (VITE_API_URL=$(VITE_API_URL), VITE_AUTO_GUEST=$(VITE_AUTO_GUEST))"
 	@echo "api: $(API_IMAGE):$(TAG)"
 	@echo "platform: $(PLATFORM)"

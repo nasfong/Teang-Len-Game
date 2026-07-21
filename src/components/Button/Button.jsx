@@ -49,10 +49,18 @@ const NAVY = {
 // string concat — which Tailwind's JIT scanner cannot see, so those classes would
 // never be emitted. Tailwind scans raw file text (comments included), so listing
 // the tokens literally here makes the scanner generate them. Keep in sync with the
-// `xl` pill + icon geometry below — the only sizes used as `sizeTall` today:
+// geometry below for every size actually passed as `sizeTall` — miss one and that
+// size silently half-applies (the classes that happen to exist win, the rest don't).
+//
+//   xl (pill + icon):
 //   tall:[--depth:8px] tall:rounded-[32px] tall:rounded-[22px]
 //   tall:px-[64px] tall:py-[20px] tall:size-[90px] tall:p-3
 //   tall:text-[40px] tall:top-3 tall:left-2 tall:left-3 tall:h-1.5 tall:w-4
+//
+//   lg (pill + icon):
+//   tall:[--depth:6px] tall:rounded-[26px] tall:rounded-[22px]
+//   tall:px-[50px] tall:py-[15px] tall:size-16 tall:p-2
+//   tall:text-[32px] tall:top-2.5 tall:left-2.5 tall:left-1.5 tall:h-1 tall:w-3.5
 //
 // Geometry, keyed by shape then size. `radius` goes on BOTH layers so their
 // silhouettes match; `sheen` sizes/places the top-left glossy light.

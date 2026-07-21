@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/Button/Button.jsx'
 import CoinIcon from '../components/CoinIcon/CoinIcon.jsx'
 import FriendsModal from './FriendsModal.jsx'
-import OnlineBoard from '../game/OnlineBoard.jsx'
-import { createMatch } from '../game/match.js'
+import { useGame } from '../games/useGame.js'
+import { DEFAULT_GAME_ID } from '../games/index.js'
 import { useRoom } from '../query/rooms'
-import { useRoomChannel } from '../game/useRoomChannel'
+import { useRoomChannel } from '../net/useRoomChannel'
 
 // TableContainer — the /table/:roomId screen. The table board is ALWAYS on screen:
 // you land here, the seats fill, a 5s countdown auto-starts once there are 2+
@@ -23,6 +23,11 @@ export default function TableContainer() {
   const channel = useRoomChannel(roomId)
   const room = channel.room ?? initialRoom
   const queryClient = useQueryClient()
+
+  // Which card game this room is playing. The module arrives in its own chunk, so
+  // it's null for the first beat — see the loading branch below. Rooms created
+  // before gameId existed have none, and fall back to the original game.
+  const game = useGame(room?.gameId ?? DEFAULT_GAME_ID)
 
   useEffect(() => {
     if (isError) navigate('/room', { replace: true })
@@ -61,19 +66,38 @@ export default function TableContainer() {
   const inCurrentMatch =
     status === 'playing' && Boolean(liveSeats?.some((s) => s.playerId === channel.playerId))
 
+  // The server holds the real "leaving after this match" marker (room
+  // .pendingLeavePlayerIds), so it survives a refresh and everyone can see it; the
+  // local flag just keeps the button responsive before the snapshot echoes back.
+  const queuedOnServer = Boolean(room?.pendingLeavePlayerIds?.includes(channel.playerId))
+  const leaving = leaveArmed || queuedOnServer
+
   function onLeaveClick() {
     // Only a player in the live hand arms the leave toggle; everyone else leaves now.
-    if (inCurrentMatch) setLeaveArmed((armed) => !armed)
-    else goToLobby()
+    if (!inCurrentMatch) return goToLobby()
+    const next = !leaving
+    setLeaveArmed(next)
+    if (next) channel.queueLeave()
+    else channel.cancelQueueLeave()
   }
 
   // This player armed leave and the match just ended → leave now (others rematch).
   useEffect(() => {
-    if (channel.rankings && leaveArmed) {
+    if (channel.rankings && leaving) {
       chLeave()
       navigate('/room', { replace: true })
     }
-  }, [channel.rankings, leaveArmed, chLeave, navigate])
+  }, [channel.rankings, leaving, chLeave, navigate])
+
+  // Who won the last match here. Held in a ref (not state) because only the deal
+  // reads it — re-rendering on it would just restart the countdown. It survives
+  // across matches, so `channel.rankings` being cleared by the next game:update
+  // can't lose it.
+  const lastWinnerRef = useRef(null)
+  useEffect(() => {
+    const winner = channel.rankings?.find((r) => r.rank === 1)?.playerId
+    if (winner) lastWinnerRef.current = winner
+  }, [channel.rankings])
 
   // Auto-start: while waiting with 2+ players, run a 5s countdown; the host fires
   // game:start at 0. A join/leave (playerCount change) restarts it — and it also
@@ -83,7 +107,7 @@ export default function TableContainer() {
   const playerId = channel.playerId
 
   useEffect(() => {
-    if (!waiting || !enough || !room) {
+    if (!waiting || !enough || !room || !game) {
       setCountdown(null)
       return
     }
@@ -94,7 +118,10 @@ export default function TableContainer() {
         const seats = [...room.players]
           .sort((a, b) => (a.seatIndex ?? 0) - (b.seatIndex ?? 0))
           .map((p) => ({ playerId: p.playerId, name: p.name }))
-        start(createMatch(seats), 15)
+        // The server owns the rule (room.rules.winnerStartsNextGame); the host just
+        // applies it. No previous winner (the room's first match) → 3♠ opens.
+        const startingPlayerId = room.rules?.winnerStartsNextGame ? lastWinnerRef.current : null
+        start(game.createMatch(seats, { startingPlayerId }), game.meta.turnSeconds)
       }
     }, AUTO_START_SECONDS * 1000)
     return () => {
@@ -102,9 +129,11 @@ export default function TableContainer() {
       clearTimeout(fire)
     }
     // playerCount so a new join (or a post-match rematch) restarts the countdown.
-  }, [waiting, enough, status, playerCount, hostId, playerId, start, room])
+  }, [waiting, enough, status, playerCount, hostId, playerId, start, room, game])
 
-  if (!room) {
+  // `game` shares the room's loading state: its chunk is fetched the moment the room
+  // arrives, and the board can't render without it anyway.
+  if (!room || !game) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-linear-to-b from-[#15324f] to-[#0a1a2b]">
         <span className="font-display text-lg text-white/80 [--stroke-width:0]">Loading table…</span>
@@ -112,15 +141,16 @@ export default function TableContainer() {
     )
   }
 
-  // Centre message while the deal is pending (winner recap → next countdown).
-  const winnerName = channel.rankings?.length
-    ? room.players.find((p) => p.playerId === channel.rankings.find((r) => r.rank === 1)?.playerId)?.name
-    : null
+  // Centre message while the deal is pending (results reveal → next countdown).
+  // After a match the board itself lists the full standings next to the revealed
+  // hands, so this is only the countdown — naming the winner here too would say it
+  // twice.
+  const justFinished = Boolean(channel.rankings?.length)
   const waitingText =
     status === 'playing'
       ? null
-      : winnerName
-        ? `🏆 ${winnerName} won! Next game in ${countdown ?? '…'}…`
+      : justFinished
+        ? `Next game in ${countdown ?? '…'}…`
         : enough
           ? `Starting in ${countdown ?? AUTO_START_SECONDS}…`
           : 'Waiting for another player…'
@@ -132,8 +162,8 @@ export default function TableContainer() {
           ends (tap again to cancel). */}
       <div className="absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-40 flex flex-col items-start gap-1">
         <div className="flex items-center gap-2">
-          <Button size="sm" variant={leaveArmed ? 'red' : 'green'} outline="navy" onClick={onLeaveClick}>
-            {leaveArmed ? 'Leaving ✓' : 'Leave'}
+          <Button size="sm" variant={leaving ? 'red' : 'green'} outline="navy" onClick={onLeaveClick}>
+            {leaving ? 'Leave ✓' : 'Leave'}
           </Button>
           {/* Invite friends — any time (they join an open seat for the next hand, or
               spectate if full). Spectators can't invite (they hold no seat). */}
@@ -143,7 +173,7 @@ export default function TableContainer() {
             </Button>
           )}
         </div>
-        {leaveArmed && status === 'playing' && (
+        {leaving && status === 'playing' && (
           <span className="rounded-full bg-black/55 px-2 py-0.5 font-display text-[11px] text-white/85 [--stroke-width:0]">
             Leaves when the match ends — tap to cancel
           </span>
@@ -169,7 +199,9 @@ export default function TableContainer() {
       {/* The board fills the screen. absolute inset-0 gives it a real height (a plain
           min-h-dvh parent leaves size-full children at 0 — that was the blank page). */}
       <div className="absolute inset-0">
-        <OnlineBoard channel={channel} room={room} waitingText={waitingText} />
+        {/* The room's game owns the whole in-room screen — seats, felt and play —
+            so a game needing a discard pile or a betting strip just draws one. */}
+        <game.Board channel={channel} room={room} waitingText={waitingText} />
       </div>
 
       {/* Friends popup (same full experience as Home) with per-friend Invite,

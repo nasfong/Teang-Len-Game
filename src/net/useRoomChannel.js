@@ -105,7 +105,19 @@ export function useRoomChannel(roomId) {
 
   const leave = useCallback(() => emit(CLIENT_EVENTS.ROOM_LEAVE, { roomId, playerId }), [emit, roomId, playerId])
 
+  // "Leave after match" — you stay for the hand in progress and the SERVER removes
+  // you at endGame. Told to the server (not just held locally) so every client sees
+  // the marker in the room snapshot, and so it still happens if you drop first.
+  const queueLeave = useCallback(
+    () => emit(CLIENT_EVENTS.ROOM_QUEUE_LEAVE, { roomId, playerId }),
+    [emit, roomId, playerId],
+  )
+  const cancelQueueLeave = useCallback(
+    () => emit(CLIENT_EVENTS.ROOM_CANCEL_QUEUE_LEAVE, { roomId, playerId }),
+    [emit, roomId, playerId],
+  )
+
   const clearError = useCallback(() => dispatch({ type: 'clearError' }), [])
 
-  return { playerId, ...state, ready, start, play, skip, playAs, skipAs, leave, clearError }
+  return { playerId, ...state, ready, start, play, skip, playAs, skipAs, leave, queueLeave, cancelQueueLeave, clearError }
 }

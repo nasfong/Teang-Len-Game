@@ -1,4 +1,4 @@
-import { deal, validatePlay, sortCards, DEFAULT_FEATURES } from '../components/GameTable/engine.js'
+import { deal, validatePlay, sortCards, DEFAULT_FEATURES } from './engine.js'
 
 // match.js — the PURE, serializable turn flow for an online game. It's a
 // seat-agnostic, bot-free port of GameTable's reducer core: every function takes a
@@ -24,14 +24,22 @@ const nextToAct = (state, from) => nextWhere(state, from, (q) => !state.finished
 
 // Deal a fresh game. `seats` = [{ playerId, name }] in seat order. Everything here
 // is plain JSON (card objects are { rank, suit, id }), safe to send over sockets.
-export function createMatch(seats) {
+//
+// `startingPlayerId` implements the server-owned `winnerStartsNextGame` rule (see
+// backend/src/config/rules.ts): pass the previous match's winner and they lead this
+// one. Omit it — the room's FIRST match, or the rule turned off — and the opener is
+// the 3♠ holder as usual. A winner who has since left the room isn't in `seats`, so
+// that falls back to 3♠ too rather than dead-locking on an absent seat.
+export function createMatch(seats, { startingPlayerId = null } = {}) {
   const { hands, starter } = deal(seats.length)
+  const winnerSeat = startingPlayerId ? seats.findIndex((s) => s.playerId === startingPlayerId) : -1
+  const opener = winnerSeat >= 0 ? winnerSeat : starter
   return {
     seats,
     hands, // hands[seat] = card[]
     current: null, // the play on the table, or null when a lead is owed
-    lastPlayer: starter, // owner of the current hand → wins the trick if all pass
-    currentPlayer: starter,
+    lastPlayer: opener, // owner of the current hand → wins the trick if all pass
+    currentPlayer: opener,
     skipped: seats.map(() => false),
     finished: seats.map(() => false),
     ranked: [], // seat indices in finish order

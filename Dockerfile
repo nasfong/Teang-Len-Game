@@ -20,6 +20,15 @@ COPY . .
 ARG VITE_API_URL
 RUN test -n "$VITE_API_URL" || (echo "ERROR: build-arg VITE_API_URL is required (e.g. https://api.example.com)" >&2 && exit 1)
 ENV VITE_API_URL=$VITE_API_URL
+
+# Testing images only: auto-register a throw-away account so the site opens on
+# Home with no login step. Leave unset for production — the login screen is then
+# the normal entry point. e.g. --build-arg VITE_AUTO_GUEST=true
+ARG VITE_AUTO_GUEST
+ARG VITE_AUTO_GUEST_PREFIX
+ENV VITE_AUTO_GUEST=$VITE_AUTO_GUEST
+ENV VITE_AUTO_GUEST_PREFIX=$VITE_AUTO_GUEST_PREFIX
+
 RUN npm run build
 
 # ---- 2. runtime: nginx serving the static files ----

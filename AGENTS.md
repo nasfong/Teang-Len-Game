@@ -27,6 +27,14 @@ src/
   components/
     registry.jsx              ← the ONE file you edit to add a component
     <Name>/<Name>.jsx         one folder per component, assets co-located
+  games/                      ← one folder per CARD GAME (see below)
+    contract.js               the game-module interface
+    index.js                  registry: id → lazy import
+    teanglen/                 engine.js, match.js, Board.jsx, index.js
+    kanteal/                  + verify.mjs (rule checks), analyse.mjs (balance)
+  app/                        shell: routing, containers, screens
+  net/                        transport: socket, api, useRoomChannel
+  query/ state/               TanStack Query hooks, zustand stores
 ```
 
 **Where art lives — ask who owns it, not where it's used.**
@@ -61,7 +69,7 @@ too. This is the documented exception to the no-outside-imports rule.
 | | needs |
 | --- | --- |
 | `Header` | Avatar — panel taps report via `onProfile`; the page opens it |
-| `Table` | Avatar, EmoteBubble (+ `table-background.png`) |
+| `Table` | Avatar, EmoteBubble (+ `table-background.png`). Seats up to 8 |
 | `EmoteBar` | Button |
 | `Footer` | Card, Button — the menu (`items`) is the page's, art and all |
 | `RoomCard` | Card, Button, Avatar |
@@ -75,6 +83,65 @@ too. This is the documented exception to the no-outside-imports rule.
 | `TrickPile` | PlayingCard |
 | `CreateRoomForm` | Card, Button, TextField, Slider, SquareToggle |
 | `AuthForm` | Card, Button, TextField, HintBubble (+ `react-hook-form`, `zod`, `@hookform/resolvers`) |
+
+## 🃏 Games
+
+The app hosts **several card games**, one folder each under `src/games/`. The layer
+they share is the **component library above** — not an engine.
+
+| game | rules |
+| --- | --- |
+| `teanglen` | Teang Len / Tiến Lên — shedding, combos, tricks, ranks every finisher |
+| `kanteal` | Kanteal (កន្ទេល) — one card per turn, cycles, elimination, one winner. 2–8 players |
+
+A game module exports one object: `meta`, `createMatch`, `Board`, `bot`,
+`summarize`. That's the whole interface, documented in
+[src/games/contract.js](src/games/contract.js). Kanteal was built against it
+without widening it, which is the evidence it's at the right altitude: it shares
+*nothing* with Teang Len but the component library — different rank order, no suit
+ranking, no combos, cycles instead of tricks, and player elimination.
+
+**Keep it that small.** The temptation is to promote a game's interesting functions
+into a shared "card engine" — `classify`, `canBeat`, `suggestSelection`. Don't:
+those are concepts specific to *shedding* games. A rummy game has melds and a
+discard pile and no notion of "beating"; a betting game has rounds and a pot. An
+interface wide enough for all three collapses into `apply(state, action)`, which
+abstracts nothing and costs a layer. The shell only needs: how many seats, give me
+a board, autoplay this seat, who won.
+
+Two properties worth not breaking:
+
+- **The backend never reads `gameState`** — it's `unknown` at every layer and the
+  server just fans it out. So **a new game needs no backend game logic at all**: no
+  validator, no socket handler, no service. The flip side is that `state` must be
+  plain JSON (no Map/Set, no class instances) because it's relayed over a socket.
+- **The registry holds loaders, not modules.** Each game gets its own Rollup chunk,
+  so a phone downloads only the one being played. Six eager imports would land on
+  the one device this game is actually played on.
+
+### Adding a game
+
+1. `src/games/<id>/` with `engine.js` (rules), `match.js` (turn flow), `Board.jsx`
+   (the whole in-room screen), and `index.js` exporting the contract object.
+2. Register the loader + catalogue entry in [src/games/index.js](src/games/index.js).
+3. Add the matching entry to **[backend/src/config/games.ts](backend/src/config/games.ts)**,
+   which is the *authority* for seat counts, turn duration and rule variations —
+   anything a client could forge. The client `catalogue` is only so the lobby can
+   list games without downloading them.
+4. Nothing else. Rooms, seats, presence, host transfer, AFK and spectators are
+   already game-agnostic.
+
+There's no test runner, but a **rules engine earns a verification script** —
+`node src/games/kanteal/verify.mjs` walks that game's spec section by section and
+then soaks the state machine with randomised games, checking that every game
+terminates and that cards are conserved. Cheap to write, and it catches the rule
+bugs a build never will. Where a spec leaves a rule open, a **balance script**
+turns the argument into a measurement — `node src/games/kanteal/analyse.mjs` sweeps
+that game's tuning knobs and reports what each does to elimination and win rates.
+
+`GameTable` is the one **game-bound component** in the gallery: an offline Teang Len
+demo with bots, so it imports `src/games/teanglen/engine.js`. Copying it out means
+bringing that folder too.
 
 ## ⚠️ Traps
 

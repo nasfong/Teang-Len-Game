@@ -9,8 +9,8 @@ import PlayingCard from '../PlayingCard/PlayingCard.jsx'
 //
 // Stateless and config-driven: `cards` is the live combo (1 card, a pair, a
 // straight, a bomb — Teang Len allows all of them, so nothing here assumes a
-// count), `pile` is everything played before it — but only the most recent play
-// (the one this combo topped) is drawn.
+// count), and `pile` is the play this combo BEAT — all of its cards, drawn in full
+// behind the live ones so you can actually read what was topped.
 
 // Card widths duplicated from PlayingCard's SIZES — spacing is computed in JS,
 // so keep them in step if you retune the card. `step` is deliberately wider than
@@ -45,8 +45,8 @@ const DROP_FROM = {
 
 /**
  * @param cards     the combo currently winning the trick
- * @param pile      earlier plays; only the last (the one this combo beat) shows,
- *                  peeking out behind the live cards
+ * @param pile      the cards of the play this combo beat — drawn in FULL, peeking
+ *                  out behind the live cards
  * @param size      'sm' | 'md' | 'lg'  (default 'md')
  * @param from      which seat the live combo was played from — 'bottom' | 'top' |
  *                  'left' | 'right'. The cards fly in from that edge. (default
@@ -61,23 +61,46 @@ export default function TrickPile({
   className = '',
 }) {
   const s = SIZES[size] ?? SIZES.md
-  // Just the play this combo beat — the top of the pile. The old scatter of eight
-  // dead cards was clutter you couldn't read anyway; one card peeking out behind
-  // the combo shows what was topped without competing with it.
-  const beaten = cards.length > 0 ? pile.slice(-1) : []
+  // The play this combo beat, in full. It used to be sliced to a single card, which
+  // meant a beaten pair/straight/fulu showed one lonely corner and you couldn't tell
+  // WHAT was topped — the thing a player most wants to check after a beat. The row
+  // is dimmed and sits behind the live combo, so showing all of it informs without
+  // competing. (Only drawn while a combo is on the table; a fresh lead beats
+  // nothing.)
+  const beaten = cards.length > 0 ? pile : []
 
   return (
     <div className={`relative flex flex-col items-center ${className}`}>
       <div className="relative flex items-center justify-center">
-        {/* The play this combo beat — peeks up from behind the live cards, dimmed
-            and static, so you can read what was topped. It sits behind because
-            it's earlier in the DOM than the combo below and both are auto z-index.
-            Centred over the combo via an inset-0 layer; items-start + a nudge up
-            leaves just its top edge showing above the live cards. */}
+        {/* The play this combo beat — peeks up from behind the live cards, dimmed,
+            so you can read what was topped. It sits behind because it's earlier in
+            the DOM than the combo below and both are auto z-index. Centred over the
+            combo via an inset-0 layer; items-start + a nudge up leaves the row's top
+            edge showing above the live cards.
+            Same `step` as the live combo, and both rows are centred, so when the
+            beaten play has the same count (the normal case — you must match type AND
+            count to beat) each old card peeks directly behind the card that topped
+            it. A bomb cutting a lone 2 just makes the back row wider; still centred. */}
         {beaten.length > 0 && (
           <div aria-hidden className="pointer-events-none absolute inset-0 flex items-start justify-center">
-            <span className="opacity-45 [transform:translateY(-42%)]">
-              <PlayingCard rank={beaten[0].rank} suit={beaten[0].suit} size={size} />
+            <span className="flex items-center opacity-45 transform-[translateY(-42%)]">
+              {beaten.map((card, i) => {
+                const id = cardId(card, i)
+                return (
+                  <span
+                    key={id}
+                    className="block transform-[rotate(var(--rot))]"
+                    style={{
+                      marginLeft: i === 0 ? 0 : `${s.step - s.w}px`,
+                      // A touch less wobble than the live combo — it's context, not
+                      // the thing being read. Deterministic, so it never re-rolls.
+                      '--rot': `${jitter(`${id}b`, 3)}deg`,
+                    }}
+                  >
+                    <PlayingCard rank={card.rank} suit={card.suit} size={size} />
+                  </span>
+                )
+              })}
             </span>
           </div>
         )}

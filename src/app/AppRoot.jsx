@@ -9,6 +9,7 @@ import LandscapeGate from './LandscapeGate.jsx'
 import { useSession } from '../state/session'
 import { connectSocket, disconnectSocket } from '../net/socket'
 import { useFriendsRealtime } from '../query/friends'
+import { useAutoGuest } from './useAutoGuest'
 
 // Keep the shared socket connected for the WHOLE time the user is logged in — not
 // just on the lobby/table screens that stream through it. Presence (who's online)
@@ -30,12 +31,25 @@ function FriendsRealtime() {
   return null
 }
 
+// Held while the testing build signs itself in — the same gradient the login and
+// home screens fall back to, so the handover reads as one continuous screen.
+function AutoGuestSplash() {
+  return <div className="min-h-dvh w-full bg-linear-to-b from-[#2B7FC9] to-[#0F3358]" />
+}
+
 // AppRoot — the real app (providers + router). Kept in its own module so it lands
 // in a SEPARATE bundle chunk: Preloader dynamically imports it, so the whole app
 // (all routes, the game engine, motion, forms…) downloads AFTER the tiny entry
 // chunk has already painted the progress screen.
 export default function AppRoot() {
   usePresenceSocket()
+  // Testing builds (VITE_AUTO_GUEST=true) sign a visitor in with a generated
+  // throw-away account before the router mounts, so they land on Home instead of
+  // the login screen. Off in production — this returns blocking:false instantly.
+  const { blocking } = useAutoGuest()
+
+  // Hold the router back for the one request, so /login never flashes first.
+  if (blocking) return <AutoGuestSplash />
 
   return (
     <QueryClientProvider client={queryClient}>

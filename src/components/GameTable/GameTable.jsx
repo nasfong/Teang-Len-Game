@@ -4,7 +4,7 @@ import Hand from '../Hand/Hand.jsx'
 import TrickPile from '../TrickPile/TrickPile.jsx'
 import TurnTimer from '../TurnTimer/TurnTimer.jsx'
 import Button from '../Button/Button.jsx'
-import { deal, classify, canBeat, validatePlay, chooseBotMove, sortCards, label, DEFAULT_FEATURES } from './engine.js'
+import { deal, classify, canBeat, validatePlay, chooseBotMove, sortCards, label, DEFAULT_FEATURES } from '../../games/teanglen/engine.js'
 
 // GameTable — a playable Teang Len demo. Deals four seats, runs the turn/skip/
 // trick/rank flow from GAME_RULES.md, and drives the three other seats as simple
@@ -342,7 +342,11 @@ export default function GameTable({ bare = false, fill = false, className = '' }
               flipStagger={handFlipStagger}
               // Always interactive — you can lift/queue cards even when it isn't
               // your turn, so Play is ready the instant the turn comes round.
-              onSelect={(id) => dispatch({ type: 'select', id })}
+              // `meta.expand` is Hand's cue to auto-complete a tapped card into a
+              // whole combination (OnlineBoard does that). This board has no
+              // suggester, so it drops the phase — otherwise the release would
+              // re-toggle and undo the press.
+              onSelect={(id, meta) => !meta?.expand && dispatch({ type: 'select', id })}
               size="md"
               // Flat row, not a fan — cards sit level (spread/curve 0). `spacing`
               // widens the step so more of each card shows; maxWidth is raised to

@@ -73,7 +73,7 @@ export function useCreateRoom() {
   const setWallet = useSession((s) => s.setWallet)
 
   return useMutation({
-    // { name, betCoin, maxPlayers } — see createRoomSchema.
+    // { name, gameId, betCoin, maxPlayers } — see createRoomSchema.
     mutationFn: (payload) => apiFetch('/api/rooms', { method: 'POST', body: payload }),
     onSuccess: ({ wallet }) => {
       if (wallet) setWallet(wallet)

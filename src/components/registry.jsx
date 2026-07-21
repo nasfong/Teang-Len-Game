@@ -41,6 +41,7 @@ import Footer from './Footer/Footer.jsx'
 import Profile from './Profile/Profile.jsx'
 import Shop from './Shop/Shop.jsx'
 import GameTable from './GameTable/GameTable.jsx'
+import KantealDemo from '../games/kanteal/Demo.jsx'
 import HomePage from './HomePage/HomePage.jsx'
 import RoomPage from './RoomPage/RoomPage.jsx'
 import TablePage from './TablePage/TablePage.jsx'
@@ -329,7 +330,15 @@ const CreateRoomFormPreview = () => {
 
   return (
     <Modal open={open} deco onClose={() => setOpen(false)} heading={CREATE_ROOM_HEADING}>
-      <CreateRoomForm balance={12000} onCancel={() => { }} onSubmit={(values) => console.log('create room', values)} />
+      <CreateRoomForm
+        balance={12000}
+        games={[
+          { id: 'teanglen', name: 'Teang Len', minPlayers: 2, maxPlayers: 4 },
+          { id: 'kanteal', name: 'Kanteal', minPlayers: 2, maxPlayers: 4 },
+        ]}
+        onCancel={() => { }}
+        onSubmit={(values) => console.log('create room', values)}
+      />
     </Modal>
   )
 }
@@ -387,10 +396,12 @@ const HintBubblePreview = () => (
 // The room list: a grid, like the real lobby. RoomCard sets no width of its own,
 // so the grid is what makes every card match — nothing is hand-sized here. The
 // long name and the 2- vs 4-seat rows prove the cards still come out equal.
+// One room deliberately carries NO `game`, since a single-game lobby passes none
+// and the card must still look right without it.
 const ROOMS = [
-  { name: "Dara's Room", betCoin: 5000, maxPlayers: 4, players: [{ name: 'Dara' }, { name: 'Sophea' }] },
-  { name: 'High Rollers', betCoin: 10000, maxPlayers: 2, players: [{ name: 'Rith' }, { name: 'Vichea' }] },
-  { name: 'Sophea’s Very Long Room Name', betCoin: 1000, maxPlayers: 4, players: [{ name: 'Sophea' }] },
+  { name: "Dara's Room", game: 'Teang Len', betCoin: 5000, maxPlayers: 4, players: [{ name: 'Dara' }, { name: 'Sophea' }] },
+  { name: 'High Rollers', game: 'Kanteal', betCoin: 10000, maxPlayers: 2, players: [{ name: 'Rith' }, { name: 'Vichea' }] },
+  { name: 'Sophea’s Very Long Room Name', game: 'Kanteal', betCoin: 1000, maxPlayers: 4, players: [{ name: 'Sophea' }] },
   { name: 'Beginners', betCoin: 2000, maxPlayers: 3, players: [] },
 ]
 
@@ -398,6 +409,29 @@ const RoomCardPreview = () => (
   <div className="grid grid-cols-3 gap-4">
     {ROOMS.map((room) => (
       <RoomCard key={room.name} {...room} onJoin={() => { }} />
+    ))}
+  </div>
+)
+
+// Two seat counts side by side, because Table has TWO layouts: 4 or fewer uses the
+// hand-tuned corners, more than 4 falls to the computed ellipse. Both need to be
+// visible in the gallery or a change to one silently breaks the other.
+const TABLE_SEATS = (n) =>
+  Array.from({ length: n }, (_, i) => ({
+    name: ['You', 'Sophea', 'Dara', 'Rith', 'Chan', 'Mony', 'Vichea', 'Bopha'][i],
+    coin: 1000 + i * 640,
+    host: i === 0,
+  }))
+
+const TablePreview = () => (
+  <div className="flex flex-col gap-6">
+    {[4, 8].map((n) => (
+      <div key={n}>
+        <p className="mb-2 font-display text-sm text-white/70 [--stroke-width:0]">
+          {n} seats — {n > 4 ? 'computed ring' : 'hand-tuned corners'}
+        </p>
+        <Table players={TABLE_SEATS(n)} currentTurn={1} />
+      </div>
     ))}
   </div>
 )
@@ -571,7 +605,10 @@ const OPPONENT = Array.from({ length: 9 }, (_, i) => ({ id: `back-${i}`, rank: '
 
 const HandPreview = () => {
   const [picked, setPicked] = useState([])
-  const toggle = (id) => setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  // meta.expand is Hand's auto-complete phase; this demo has no suggester, so it
+  // drops that call rather than re-toggling the card the press just lifted.
+  const toggle = (id, meta) =>
+    !meta?.expand && setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
   // Stand in for the game's rules: pretend nothing under a 7 can beat the trick.
   const [guard, setGuard] = useState(false)
@@ -634,12 +671,17 @@ const STRAIGHT = [
   { rank: '7', suit: 'hearts' },
   { rank: '8', suit: 'spades' },
 ]
-const DEAD = [
-  { rank: '3', suit: 'clubs' },
-  { rank: '4', suit: 'diamonds' },
-  { rank: '6', suit: 'spades' },
-  { rank: '8', suit: 'hearts' },
-  { rank: 'J', suit: 'clubs' },
+// The play each live combo BEAT — same type and count, one rank lower, which is
+// what a real beat looks like. TrickPile draws all of it behind the live cards.
+const BEATEN_PAIR = [
+  { rank: '7', suit: 'clubs' },
+  { rank: '7', suit: 'diamonds' },
+]
+const BEATEN_STRAIGHT = [
+  { rank: '4', suit: 'clubs' },
+  { rank: '5', suit: 'diamonds' },
+  { rank: '6', suit: 'hearts' },
+  { rank: '7', suit: 'spades' },
 ]
 
 const TrickPilePreview = () => (
@@ -648,7 +690,7 @@ const TrickPilePreview = () => (
         crowd the hand), the local player's 13-card fan along the front rim the
         You seat freed up, and the active opponent ringed by the turn timer. */}
     <Table currentTurn={2} turnSeconds={20} hand={<Hand cards={DEALT} size="md" />}>
-      <TrickPile cards={PAIR} pile={DEAD} size="sm" />
+      <TrickPile cards={PAIR} pile={BEATEN_PAIR} size="sm" />
     </Table>
 
     <div className="flex flex-wrap items-center justify-center gap-12">
@@ -672,8 +714,8 @@ const TrickPilePreview = () => (
 
     {/* Pile — the beaten play peeks out behind the live combo */}
     <div className="flex flex-col items-center gap-2">
-      <TrickPile cards={STRAIGHT} pile={DEAD} size="lg" />
-      <span className="font-display text-xs text-white/60 [--stroke-width:0]">beaten play peeking behind</span>
+      <TrickPile cards={STRAIGHT} pile={BEATEN_STRAIGHT} size="lg" />
+      <span className="font-display text-xs text-white/60 [--stroke-width:0]">beaten play peeking behind (full combo)</span>
     </div>
   </div>
 )
@@ -1344,8 +1386,16 @@ export const components = [
     name: 'Table',
     kind: 'block',
     status: 'done',
-    notes: 'Card-game table with profile seats around a felt surface. Config-driven: players[], currentTurn, children (table centre).',
-    Component: Table,
+    notes: 'Card-game table with profile seats around a felt surface. Config-driven: players[], currentTurn, children (table centre). Seats up to 8: four or fewer use hand-tuned corner spots, more than four spread along a computed ellipse that skips the bottom centre (the local hand fan owns the front rim).',
+    Component: TablePreview,
+  },
+  {
+    name: 'Kanteal',
+    kind: 'block',
+    status: 'done',
+    notes:
+      'Playable Kanteal (កន្ទេល) demo — deals four seats and runs the real cycle / beat / pass / elimination flow, with three bots so one person can play the table. Composes Table + Hand + PlayingCard + Button. All rule logic lives in a pure engine (src/games/kanteal/); `node src/games/kanteal/verify.mjs` checks it section by section against the spec and `analyse.mjs` reports the balance. GAME-BOUND: copying this brings src/games/kanteal/ too.',
+    Component: KantealDemo,
   },
   {
     name: 'CreateRoomForm',

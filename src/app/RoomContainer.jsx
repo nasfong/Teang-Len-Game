@@ -9,6 +9,7 @@ import keysIcon from '../components/CreateRoomForm/keys.webp'
 import { useSession, selectUser, selectCoin } from '../state/session'
 import { useWallet } from '../query/auth'
 import { useRooms, useCreateRoom, useJoinRoom } from '../query/rooms'
+import { catalogue } from '../games/index.js'
 
 // The Create Room modal's heading art (same treatment as the workbench preview).
 const HEADING_ICON =
@@ -54,7 +55,7 @@ export default function RoomContainer() {
 
   function submitCreate(values) {
     createRoom.mutate(
-      { name: values.roomName, betCoin: values.betAmount, maxPlayers: values.maxPlayers },
+      { name: values.roomName, gameId: values.gameId, betCoin: values.betAmount, maxPlayers: values.maxPlayers },
       {
         onSuccess: ({ room }) => {
           setCreating(false)
@@ -101,6 +102,7 @@ export default function RoomContainer() {
         )}
         <CreateRoomForm
           balance={coin}
+          games={catalogue}
           defaultName={displayName}
           creating={createRoom.isPending}
           onCancel={() => setCreating(false)}

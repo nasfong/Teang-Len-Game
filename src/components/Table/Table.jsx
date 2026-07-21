@@ -8,7 +8,8 @@ import TurnTimer from '../TurnTimer/TurnTimer.jsx'
 // with player profile seats placed around it. Config-driven: pass a `players`
 // array and it lays the seats out AROUND the table (seat 0 = local player, tucked
 // into the bottom-left corner; then right / top / left for the opponents, so the
-// seat order walks a ring). `currentTurn`
+// seat order walks a ring). Seats UP TO 8 — past four, the opponents move to a
+// computed ellipse (see "Seats beyond four"). `currentTurn`
 // glows the active seat; pass `turnSeconds` and it rings that seat with a
 // draining TurnTimer instead (`turnKey` re-arms the ring each turn, `onTurnExpire`
 // fires when it runs out). `children` fills the felt centre (the trick pile)
@@ -55,6 +56,38 @@ const SEAT_POS = {
 // bottom → right → top → left → bottom — which is the turn order the game uses.
 const SEAT_ORDER = ['bottom', 'right', 'top', 'left']
 
+// ── Seats beyond four ─────────────────────────────────────────────────────────
+// Up to 4 players use the hand-tuned corners above, unchanged. Kanteal seats up to
+// 8, and there simply aren't 8 good hand-tuned spots on this artwork — so past 4
+// the opponents are spread along an ellipse instead.
+//
+// This is the ONE place inline `style` is right (see the trap in AGENTS.md): the
+// position is a computed number per seat, exactly like Hand's marginLeft. Only
+// left/top come in as values; the centring stays a class, so nothing can collide.
+const MAX_SEATS = 8
+
+// The ellipse hugs the felt's rim. Slightly inside the 2% class-based spots, since
+// a computed seat can land mid-edge where there's no corner vignette to sit in.
+const RING = { rx: 45, ry: 42 }
+
+// Degrees, y-down: 90 = bottom centre, 0 = right, -90 = top, 180 = left.
+// Opponents sweep CLOCKWISE from 30° (upper bottom-right) round to -210° (its mirror
+// on the left). The arc deliberately EXCLUDES the whole bottom band: the local
+// player's hand fan spans the full front rim, and the first draft's wider 290° arc
+// put the nearest opponent at 84% down — right on top of the cards. 240° keeps every
+// seat above 71%, clear of the fan at phone-landscape heights.
+const ARC_START = 30
+const ARC_SWEEP = 240
+
+/** Screen position for one opponent on the ring. `k` is 0-based among opponents. */
+function ringSpot(k, opponents, scale = 1) {
+  const a = ((ARC_START - (ARC_SWEEP * k) / opponents) * Math.PI) / 180
+  return {
+    left: `${50 + RING.rx * scale * Math.cos(a)}%`,
+    top: `${50 + RING.ry * scale * Math.sin(a)}%`,
+  }
+}
+
 // Where an opponent's single face-down card sits — right beside their avatar on
 // the felt-facing side, the way the reference client places it (top seat: card to
 // the avatar's right; side seats: card toward the centre). Seat 0 (the local
@@ -66,9 +99,10 @@ const OPP_HAND_POS = {
   right: 'top-1/2 right-[11%] -translate-y-1/2',
 }
 
-// Children sit well inside the felt (25–75% across, 32–68% down) so cards never
-// ride up onto the painted wooden rim.
-const CENTRE = 'absolute inset-x-[25%] inset-y-[32%] flex items-center justify-center'
+// Children sit well inside the felt so cards never ride up onto the painted wooden
+// rim. Widened from 25%/32% now that the opponent seats are the small tier — the
+// space they gave back goes to the trick pile, which is what players actually read.
+const CENTRE = 'absolute inset-x-[22%] inset-y-[26%] flex items-center justify-center'
 
 const DEFAULT_PLAYERS = [
   { name: 'You', coin: 1250, host: true },
@@ -137,20 +171,14 @@ function PlayerSeat({ name = 'Player', coin, avatarSrc, host = false, active = f
       {/* Pill + coin are darker than the plain look would need: they sit over busy
           painted scenery, so they carry their own contrast rather than relying on
           whatever pixel lands behind them. */}
-      <div className="w-full rounded-full border border-white/15 bg-black/65 px-3 py-0.5 backdrop-blur-[2px]">
-        <div
-          className={`truncate text-center font-display ${
-            compact ? 'text-xs' : 'text-sm'
-          } text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]`}
-        >
+      <div className={`w-full rounded-full border border-white/15 bg-black/65 ${s.pill} py-0.5 backdrop-blur-[2px]`}>
+        <div className={`truncate text-center font-display ${s.name} text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]`}>
           {name}
         </div>
       </div>
 
       {coin != null && (
-        <div
-          className={`font-display ${compact ? 'text-[11px]' : 'text-xs'} text-[#FFD27A] [text-shadow:0_1px_4px_rgba(0,0,0,0.9)]`}
-        >
+        <div className={`font-display ${s.coin} text-[#FFD27A] [text-shadow:0_1px_4px_rgba(0,0,0,0.9)]`}>
           <CoinIcon /> {coin.toLocaleString()}
         </div>
       )}
@@ -167,6 +195,13 @@ export default function Table({ players = DEFAULT_PLAYERS, currentTurn = 0, turn
   const frame = fill
     ? 'relative size-full overflow-hidden bg-[#1c2b3a]'
     : FRAME
+
+  const seated = players.slice(0, MAX_SEATS)
+  // Past four there aren't enough hand-tuned corners, so the opponents go on the
+  // computed ring instead. Four or fewer keeps the tuned layout EXACTLY as it was —
+  // this is a pure addition, not a re-layout of the existing games.
+  const ring = seated.length > 4
+
   return (
     <div className={`${frame} ${className}`}>
       <img src={tableBg} alt="" aria-hidden decoding="sync" className="absolute inset-0 size-full object-cover" draggable={false} />
@@ -181,14 +216,19 @@ export default function Table({ players = DEFAULT_PLAYERS, currentTurn = 0, turn
       <div className={CENTRE}>{children}</div>
 
       {/* Profile seats, auto-placed around the table. Seat 0 is the local player
-          (compact, bottom-left corner); the active seat gets the countdown ring
+          ('md' tier, bottom-left corner); opponents use the smaller 'sm' tier so the
+          felt and cards keep priority. The active seat gets the countdown ring
           when `turnSeconds` is set. */}
-      {players.slice(0, 4).map((player, i) => (
-        <div key={i} className={`absolute z-10 ${SEAT_POS[SEAT_ORDER[i]]}`}>
+      {seated.map((player, i) => (
+        <div
+          key={i}
+          className={`absolute z-10 ${ring && i > 0 ? '-translate-x-1/2 -translate-y-1/2' : SEAT_POS[SEAT_ORDER[i]]}`}
+          style={ring && i > 0 ? ringSpot(i - 1, seated.length - 1) : undefined}
+        >
           <PlayerSeat
             {...player}
             active={i === currentTurn}
-            compact={i === 0}
+            size={i === 0 ? 'md' : 'sm'}
             turnSeconds={i === currentTurn ? turnSeconds : undefined}
             turnKey={turnKey}
             onTurnExpire={i === currentTurn ? onTurnExpire : undefined}
@@ -200,13 +240,29 @@ export default function Table({ players = DEFAULT_PLAYERS, currentTurn = 0, turn
           `players`; seat 0 is skipped (that's the local player, whose hand is the
           front-rim fan below). The page builds the <Hand faceDown> nodes, so Table
           still imports no Hand — same contract as `hand` and `children`. */}
-      {opponentHands.map((node, i) =>
-        node && i !== 0 && OPP_HAND_POS[SEAT_ORDER[i]] ? (
+      {opponentHands.slice(0, seated.length).map((node, i) => {
+        if (!node || i === 0) return null
+        // On the ring, the hand rides the SAME angle as its seat but at 72% of the
+        // radius — i.e. tucked just inside its owner, toward the felt (but well clear
+        // of the centre slot, where the trick pile lives). That keeps
+        // the pairing readable at any seat count without a second lookup table.
+        if (ring) {
+          return (
+            <div
+              key={i}
+              className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+              style={ringSpot(i - 1, seated.length - 1, 0.72)}
+            >
+              {node}
+            </div>
+          )
+        }
+        return OPP_HAND_POS[SEAT_ORDER[i]] ? (
           <div key={i} className={`absolute z-10 ${OPP_HAND_POS[SEAT_ORDER[i]]}`}>
             {node}
           </div>
-        ) : null,
-      )}
+        ) : null
+      })}
 
       {/* Local player's hand — its own slot along the front rim, centred across
           the full width because the You seat vacated the middle. z-20 so the fan

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import Table from '../components/Table/Table.jsx'
-import Hand from '../components/Hand/Hand.jsx'
-import TrickPile from '../components/TrickPile/TrickPile.jsx'
-import Button from '../components/Button/Button.jsx'
-import { classify, canBeat, label, suggestSelection, DEFAULT_FEATURES } from '../components/GameTable/engine.js'
+import Table from '../../components/Table/Table.jsx'
+import Hand from '../../components/Hand/Hand.jsx'
+import TrickPile from '../../components/TrickPile/TrickPile.jsx'
+import Button from '../../components/Button/Button.jsx'
+import { classify, canBeat, label, suggestSelection, DEFAULT_FEATURES } from './engine.js'
 import { applyPlay, applySkip, deriveFlags, mySeatIndex, lowestCard } from './match.js'
 
 // OnlineBoard — the networked table, ALWAYS on screen (lobby and gameplay are the
@@ -20,6 +20,8 @@ import { applyPlay, applySkip, deriveFlags, mySeatIndex, lowestCard } from './ma
 const FEATURES = DEFAULT_FEATURES
 const TURN_SECONDS = 15
 const SEAT_DIR = ['bottom', 'right', 'top', 'left']
+// Finish-order badges for the end-of-match standings; 4th+ falls back to "#n".
+const MEDALS = ['🥇', '🥈', '🥉']
 
 export default function OnlineBoard({ channel, room, waitingText }) {
   const playerId = channel.playerId
@@ -117,16 +119,31 @@ export default function OnlineBoard({ channel, room, waitingText }) {
     return { name: s.name, host: false, afk: info?.isOnline === false, coin: info?.coin }
   })
 
+  // The match holds in `over` for the results countdown before the next deal. During
+  // that window every seat's REMAINING cards are turned FACE UP beside their profile
+  // so the table can see what everyone was left holding — the standard reveal most
+  // online card games do. The final state still carries those hands (a player who
+  // went out has an empty one), so nothing extra has to be relayed.
+  const revealing = Boolean(gs) && gs.phase === 'over'
+  const showHands = playing || revealing
+
   // --- playing-only derived values ---
   const current = playing ? gs.current : null
-  const myHand = playing && !isSpectator ? (gs.hands[mySeat] ?? []) : []
+  const myHand = showHands && !isSpectator ? (gs.hands[mySeat] ?? []) : []
   const isMyTurn = playing && !isSpectator && gs.currentPlayer === mySeat
 
   const opponentHands = Array.from({ length: n }, (_, r) => {
-    if (!playing) return null
+    if (!showHands) return null
     if (r === 0 && !isSpectator) return null // my own hand is the face-up one below
     const h = gs.hands[abs(r)]
-    return h && h.length ? <Hand key={r} cards={h.slice(0, 1)} faceDown count={h.length} size="sm" /> : null
+    if (!h || !h.length) return null
+    // Revealed: the whole remaining hand, face up and flat so it reads at a glance
+    // in the small slot beside the seat. Playing: one back with a count badge.
+    return revealing ? (
+      <Hand key={r} cards={h} size="xs" spread={0} curve={0} spacing={13} maxWidth={130} />
+    ) : (
+      <Hand key={r} cards={h.slice(0, 1)} faceDown count={h.length} size="sm" />
+    )
   })
 
   const selectedCards = myHand.filter((c) => selected.includes(c.id))
@@ -136,16 +153,28 @@ export default function OnlineBoard({ channel, room, waitingText }) {
   // Tapping a card auto-completes the combination it most likely belongs to (the
   // smallest hand that beats the table), so answering a pair/triple/run is ONE tap
   // instead of two-to-five. Manual control is preserved: the auto-pick only fires on
-  // the FIRST tap of an empty selection — after that taps add and remove one card at
-  // a time, so any suggestion can be adjusted or built by hand.
-  function toggle(id) {
+  // a tap that started from an EMPTY selection — after that taps add and remove one
+  // card at a time, so any suggestion can be adjusted or built by hand.
+  //
+  // It arrives in two phases because Hand commits the pressed card on POINTERDOWN,
+  // before it can know whether the gesture is a tap or the start of a sweep:
+  //   press   → the card alone lifts, instantly (meta.sweep — taken literally)
+  //   release → meta.expand, and only then do its partners join it
+  // Growing the selection under a finger that turned out to be sweeping would fight
+  // the player, so the expansion waits until the gesture is known.
+  function toggle(id, meta) {
     setMessage('')
     setSelected((sel) => {
+      if (meta?.expand) {
+        // Only expand a lone freshly-pressed card. If the player has been building a
+        // selection by hand, or that press was a deselect, leave it exactly as it is.
+        if (sel.length !== 1 || sel[0] !== id) return sel
+        const tapped = myHand.find((c) => c.id === id)
+        const suggestion = isMyTurn ? suggestSelection(myHand, current, tapped, FEATURES) : null
+        return suggestion ? suggestion.map((c) => c.id) : sel
+      }
       if (sel.includes(id)) return sel.filter((x) => x !== id) // deselect
-      if (sel.length) return [...sel, id] // adjusting an existing selection
-      const tapped = myHand.find((c) => c.id === id)
-      const suggestion = isMyTurn ? suggestSelection(myHand, current, tapped, FEATURES) : null
-      return suggestion ? suggestion.map((c) => c.id) : [id]
+      return [...sel, id]
     })
   }
   function playCards() {
@@ -188,9 +217,47 @@ export default function OnlineBoard({ channel, room, waitingText }) {
           turnSeconds={playing ? TURN_SECONDS : undefined}
           turnKey={playing ? gs.turnKey : 0}
           opponentHands={opponentHands}
-          hand={playing && !isSpectator ? <Hand cards={myHand} selected={selected} onSelect={toggle} size="md" spread={0} curve={0} spacing={46} maxWidth={700} /> : null}
+          hand={
+            showHands && !isSpectator ? (
+              // While revealing, my leftovers are shown but inert — no selecting a
+              // card during the results countdown.
+              <Hand
+                cards={myHand}
+                selected={revealing ? [] : selected}
+                onSelect={revealing ? undefined : toggle}
+                size="md"
+                spread={0}
+                curve={0}
+                // Step between cards (the card itself is 64px), so this IS the
+                // exposed strip of every card but the last. Tightened from 46 so the
+                // hand reads as a held fan rather than a spread-out row. Don't go
+                // much below this: the strip is also the tap target, and once it
+                // drops far under ~36px, adjacent cards start stealing each other's
+                // taps on a phone.
+                spacing={52}
+                maxWidth={700}
+              />
+            ) : null
+          }
         >
-          {playing ? (
+          {revealing ? (
+            // Final standings stay up for the whole countdown, next to the reveal.
+            <div className="flex flex-col items-center gap-1 rounded-2xl border border-white/15 bg-black/60 px-4 py-2 text-center backdrop-blur-[2px]">
+              {gs.ranked.map((seat, i) => (
+                <span
+                  key={seat}
+                  className="font-display text-sm leading-tight text-white [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]"
+                >
+                  {MEDALS[i] ?? `#${i + 1}`} {gs.seats[seat]?.name}
+                </span>
+              ))}
+              {waitingText && (
+                <span className="mt-0.5 font-display text-xs text-[#FFD27A] [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+                  {waitingText}
+                </span>
+              )}
+            </div>
+          ) : playing ? (
             <TrickPile
               cards={current?.cards ?? []}
               pile={gs.beaten}
@@ -208,13 +275,18 @@ export default function OnlineBoard({ channel, room, waitingText }) {
           )}
         </Table>
 
+        {/* The two turn actions, centred above the hand. Red PASS / green PLAY is
+            the convention across this family of games and reads instantly without
+            being read. Sized md on a phone (≈132×42px, matching the proportions
+            these games use) and lg on a desktop — they're the only controls during a
+            turn, so they should be the easiest thing on screen to hit. */}
         {isMyTurn && (
-          <div className="absolute bottom-28 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3">
-            <Button variant="blue" size="sm" outline="navy" disabled={!current} onClick={pass}>
-              Pass
+          <div className="absolute bottom-28 left-1/2 z-30 flex -translate-x-1/2 items-center gap-4">
+            <Button variant="red" size="md" sizeTall="lg" outline="navy" disabled={!current} onClick={pass}>
+              PASS
             </Button>
-            <Button variant="green" size="sm" disabled={!canPlaySelection} onClick={playCards}>
-              Play{selectedCards.length ? ` ${selectedCards.length}` : ''}
+            <Button variant="green" size="md" sizeTall="lg" outline="navy" disabled={!canPlaySelection} onClick={playCards}>
+              PLAY{selectedCards.length ? ` ${selectedCards.length}` : ''}
             </Button>
           </div>
         )}
