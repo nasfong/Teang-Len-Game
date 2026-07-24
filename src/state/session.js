@@ -15,11 +15,19 @@ export const useSession = create(
       token: null,
       user: null,
       wallet: null,
+      // True only after the user pressed Log out. Testing builds read it so the
+      // auto-guest sign-in doesn't instantly undo an intentional sign-out —
+      // every OTHER way the session empties (an expired token 401ing) is a
+      // failure we do want re-signed-in. Not persisted: reopening starts clean.
+      manualSignOut: false,
 
       /** Set from a login/register response ({ token, user, wallet }). */
-      setSession: ({ token, user, wallet }) => set({ token, user, wallet }),
+      setSession: ({ token, user, wallet }) => set({ token, user, wallet, manualSignOut: false }),
       setWallet: (wallet) => set({ wallet }),
+      /** Session lost, not chosen — expiry, a 401, a server that forgot us. */
       clear: () => set({ token: null, user: null, wallet: null }),
+      /** The Log out button: same teardown, but deliberate. */
+      logout: () => set({ token: null, user: null, wallet: null, manualSignOut: true }),
     }),
     {
       name: 'teanglen-session',
@@ -32,3 +40,4 @@ export const useSession = create(
 export const selectIsAuthed = (s) => Boolean(s.token)
 export const selectUser = (s) => s.user
 export const selectCoin = (s) => s.wallet?.coin ?? 0
+export const selectManualSignOut = (s) => s.manualSignOut

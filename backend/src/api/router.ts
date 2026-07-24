@@ -21,6 +21,7 @@ import {
   sendRequestHandler,
 } from './friendController'
 import {
+  activeRoomHandler,
   createRoomHandler,
   getRoomHandler,
   inviteToRoomHandler,
@@ -53,6 +54,11 @@ export function buildApiRouter(): Router {
   })
 
   api.get('/wallet', requireAuth, (req, res) => {
+    const user = getUserById(req.userId as string)
+    if (!user) {
+      sendFail(res, 'User not found', 401)
+      return
+    }
     sendOk(res, getWallet(req.userId as string))
   })
 
@@ -88,6 +94,9 @@ export function buildApiRouter(): Router {
 
   api.get('/rooms', requireAuth, listRoomsHandler)
   api.post('/rooms', requireAuth, validate(createRoomSchema), createRoomHandler)
+  // The literal /rooms/active MUST precede /rooms/:roomId, or "active" is captured
+  // as a roomId and shadowed.
+  api.get('/rooms/active', requireAuth, activeRoomHandler)
   api.get('/rooms/:roomId', requireAuth, validate(roomIdParamSchema, 'params'), getRoomHandler)
   api.post('/rooms/:roomId/join', requireAuth, validate(roomIdParamSchema, 'params'), joinRoomHandler)
   api.post(

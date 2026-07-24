@@ -1,15 +1,18 @@
 import { AnimatePresence, motion } from 'motion/react'
-import Header from '../Header/Header.jsx'
+import TopBar from '../TopBar/TopBar.jsx'
 import Card from '../Card/Card.jsx'
 import Button from '../Button/Button.jsx'
 import RoomCard from '../RoomCard/RoomCard.jsx'
 
-// RoomPage — the lobby: the Header dashboard on top, then a frosted glass panel
-// filling the screen that lists the open rooms as a responsive grid of RoomCards,
-// with a title row (Create Room + a Back tab). Sits over the same full-bleed
-// background as HomePage.
+// RoomPage — the lobby: a FLAT one-line TopBar (back · title · coin · profile, with
+// Create Room in its action slot), then a frosted glass panel filling the rest of
+// the screen with the open rooms as a grid of RoomCards. Deliberately uses TopBar,
+// not the landing screen's tall Header, and folds the old in-panel title row into
+// that bar — both to hand the room list as much vertical space as possible, the
+// scarce thing on a landscape phone. Sits over the same full-bleed background as
+// HomePage.
 //
-// TOP-LEVEL SCENE, not a leaf: composes Header + Card + Button + RoomCard. Like
+// TOP-LEVEL SCENE, not a leaf: composes TopBar + Card + Button + RoomCard. Like
 // HomePage it owns the wiring — the room data and every handler come in as props,
 // so the page stays presentational. The rooms list is the PAGE'S: pass `rooms`
 // and `onJoin`; RoomPage just lays them out on the glass.
@@ -20,15 +23,15 @@ import RoomCard from '../RoomCard/RoomCard.jsx'
 // HomePage — see that file for why isolate is required). Pass `background` to
 // override; a house gradient stands in without one, and the glass still frosts it.
 //
-// SCROLLING: the glass panel grows to fill the space between Header and the screen
-// edge; the room grid inside it scrolls (min-h-0 is what lets a flex child scroll
-// instead of pushing the panel taller). So a long lobby stays on one screen.
+// SCROLLING: the page is an EXACT window height (h-app, not min-h-app), so the
+// TopBar stays pinned and never scrolls. The glass panel fills the space beneath it,
+// and the room grid INSIDE the panel is the only thing that scrolls (min-h-0 is what
+// lets a flex child scroll instead of pushing the page taller). So a long lobby stays
+// on one screen with the bar fixed above it.
 
 export default function RoomPage({
   background,
-  // Header
-  title,
-  subtitle,
+  // TopBar
   username,
   coin,
   avatarSrc,
@@ -44,7 +47,7 @@ export default function RoomPage({
   className = '',
 }) {
   return (
-    <div className={`relative isolate flex min-h-dvh w-full flex-col overflow-hidden ${className}`}>
+    <div className={`relative isolate flex h-app w-full flex-col overflow-hidden ${className}`}>
       {/* Full-bleed background the glass frosts. -z-10 keeps it behind the in-flow
           content; the root's `isolate` gives that negative layer a stacking context
           so it doesn't slip behind the whole page (see HomePage for the full note). */}
@@ -54,36 +57,29 @@ export default function RoomPage({
         <div aria-hidden className="absolute inset-0 -z-10 bg-linear-to-b from-[#2B7FC9] to-[#0F3358]" />
       )}
 
-      <Header
-        title={title}
-        subtitle={subtitle}
-        username={username}
+      {/* Flat one-line bar: back · title · coin · profile, with Create Room folded
+          into its action slot. This replaces both the tall dashboard Header AND the
+          old in-panel title row, so the glass below is all list. */}
+      <TopBar
+        title={panelTitle}
         coin={coin}
+        username={username}
         avatarSrc={avatarSrc}
         onProfile={onProfile}
+        onBack={onBack}
+        action={
+          onCreate && (
+            <Button size="sm" variant="lime" outline="navy" onClick={onCreate}>
+              Create Room
+            </Button>
+          )
+        }
       />
 
-      {/* The glass panel fills the gap under the Header. min-h-0 on the flex column
+      {/* The glass panel fills the gap under the bar. min-h-0 on the flex column
           lets the inner grid own the scroll. */}
       <main className="flex min-h-0 flex-1 flex-col px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] pt-4 pb-6">
         <Card variant="glass" className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-4 p-4 sm:p-5">
-          {/* Title row — Back tab (if any), the panel title, and Create Room. */}
-          <div className="flex items-center gap-3">
-            {onBack && (
-              <Button shape="circle" size="sm" variant="blue" outline="navy" aria-label="Back" onClick={onBack}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </Button>
-            )}
-            <h2 className="mr-auto font-display text-2xl text-white [--stroke-color:#00376B]">{panelTitle}</h2>
-            {onCreate && (
-              <Button size="sm" variant="lime" outline="navy" onClick={onCreate}>
-                Create Room
-              </Button>
-            )}
-          </div>
-
           {/* The grid scrolls; min-h-0 + overflow-y-auto keeps it inside the panel
               instead of stretching it. pr-1 leaves room for the scrollbar.
               content-start is what keeps the CARDS at their natural height: a grid

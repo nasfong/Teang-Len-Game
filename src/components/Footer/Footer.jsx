@@ -41,7 +41,7 @@ import settingIcon from './setting.webp'
 
 // How far PLAY and the menu float above the panel's top edge. Shared by both, so
 // they can't drift apart — the original hard-coded -10px on the button alone.
-const LIFT = 'relative -top-3 tall:-top-4'
+const LIFT = 'relative -top-6 tall:-top-4'
 
 // Divider between menu items — carved into the panel rather than drawn on it:
 // a dark groove with a white highlight down its right side is how a bevelled
@@ -50,7 +50,7 @@ const LIFT = 'relative -top-3 tall:-top-4'
 // it looks moulded from the panel instead of stuck to it.
 // Fixed height rather than self-stretch: stretching would tie the groove's length
 // to the tallest item's content, so a longer label would quietly resize it.
-const DIVIDER = 'relative top-5 h-9 w-px shrink-0 self-center bg-[#00376B]/45 shadow-[1px_0_0_rgba(255,255,255,0.22)] tall:top-8 tall:h-14'
+const DIVIDER = 'relative top-4 h-7 w-px shrink-0 self-center bg-[#00376B]/45 shadow-[1px_0_0_rgba(255,255,255,0.22)] tall:top-8 tall:h-14'
 
 /** One destination: icon over label. Deliberately flat — a row of chunky 3D
  *  buttons would compete with PLAY, and PLAY has to win.
@@ -79,10 +79,10 @@ function FooterItem({ icon, label, onClick }) {
       onClick={onClick}
       className="flex h-full flex-1 flex-col items-center justify-start gap-1 rounded-2xl px-1 pt-1 transition-transform duration-200 ease-out active:scale-110 active:duration-75"
     >
-      <span className="flex h-[var(--menu-icon,80px)] items-center justify-center text-[34px] leading-none drop-shadow-[0_3px_3px_rgba(0,0,0,0.5)] tall:text-[52px] [&>img]:h-full [&>img]:w-auto [&>img]:object-contain">
+      <span className="flex h-[var(--menu-icon,80px)] items-center justify-center text-[28px] leading-none drop-shadow-[0_3px_3px_rgba(0,0,0,0.5)] tall:text-[52px] [&>img]:h-full [&>img]:w-auto [&>img]:object-contain">
         {icon}
       </span>
-      <span className="font-display text-lg leading-none text-white/85 [--stroke-width:4px] tall:text-2xl tall:[--stroke-width:6px]">{label}</span>
+      <span className="font-display text-base leading-none text-white/85 [--stroke-width:3px] tall:text-2xl tall:[--stroke-width:6px]">{label}</span>
     </button>
   )
 }
@@ -159,7 +159,7 @@ export default function Footer({
       <div className="relative flex w-full justify-center">
         {/* Corner tabs, flush to the screen's sides. Behind the bar (no z), so PLAY
             and the menu, which lift over the panel, always read on top. */}
-        <CornerTab side="left" icon={loklakIcon} alt="Loklak" onClick={onLoklak} />
+        {/* <CornerTab side="left" icon={loklakIcon} alt="Loklak" onClick={onLoklak} /> */}
 
         <Card
           // Docked to the screen's bottom edge, so only the top corners round. z-10
@@ -170,7 +170,7 @@ export default function Footer({
           // lines. Aligning tops is what makes them read as one floating row.
           // The space this leaves at the bottom is wanted — the bar sits on the
           // screen edge, where a phone's home indicator lives.
-          className="z-10 h-20 w-full max-w-170 items-start gap-2 px-4 tall:h-25 tall:gap-4 tall:px-6"
+          className="z-10 h-16 w-full max-w-120 items-start gap-2 px-3 tall:h-25 tall:gap-4 tall:px-6"
         >
           {/* PLAY breaks out over the panel's top edge — the original's best idea.
             The wrapper takes the offset: Button's root is `relative` for its slab,
@@ -185,7 +185,7 @@ export default function Footer({
             so the menu grows into the free space instead of huddling at the edge.
             Same LIFT as PLAY, so both float off the panel by the same amount. */}
           {/* --menu-icon sizes each FooterItem's icon; compact on short screens. */}
-          <div className={`relative -top-6 flex flex-1 items-stretch justify-around gap-1 [--menu-icon:48px] tall:-top-10 tall:[--menu-icon:80px]`}>
+          <div className={`relative -top-6 flex flex-1 items-stretch justify-around gap-1 [--menu-icon:38px] tall:-top-10 tall:[--menu-icon:80px]`}>
             {items.map((it, i) => (
               <Fragment key={it.id ?? it.label}>
                 {/* Between items only — never a trailing groove against the panel's
@@ -196,7 +196,7 @@ export default function Footer({
             ))}
           </div>
         </Card>
-        <CornerTab side="right" icon={settingIcon} alt="Settings" onClick={onSetting} />
+        {/* <CornerTab side="right" icon={settingIcon} alt="Settings" onClick={onSetting} /> */}
       </div>
     </div>
   )

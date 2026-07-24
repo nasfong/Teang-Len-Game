@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import type { Server } from 'socket.io'
 import { toRoomSnapshot } from '../rooms/roomFactory'
+import { findRoomByPlayerId } from '../rooms/roomStore'
 import * as roomService from '../services/roomService'
 import { getUserById } from '../modules/user/userStore'
 import { canAfford, getWallet } from '../modules/wallet/walletService'
@@ -20,6 +21,17 @@ function pushLobby(req: Request): void {
 
 export function listRoomsHandler(_req: Request, res: Response): void {
   sendOk(res, { rooms: roomService.listVisibleRooms().map(toRoomSnapshot) })
+}
+
+// "Which live room am I seated in?" — the basis for cold-boot recovery. The client
+// asks this on launch and, if a room comes back, drops the player straight into the
+// table (seat, hand and clock all ride in the snapshot). playerId comes from the
+// verified token, never the request body. Returns { room: null } when they're in
+// none, which is the common case — not an error.
+export function activeRoomHandler(req: Request, res: Response): void {
+  const userId = req.userId as string
+  const room = findRoomByPlayerId(userId)
+  sendOk(res, { room: room ? toRoomSnapshot(room) : null })
 }
 
 export function getRoomHandler(req: Request, res: Response): void {

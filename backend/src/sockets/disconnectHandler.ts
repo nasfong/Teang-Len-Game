@@ -4,7 +4,7 @@ import { DISCONNECT } from '../types/events'
 import { findRoomBySocketId, getRoom } from '../rooms/roomStore'
 import { markDisconnected } from '../services/roomService'
 import { removeSpectatorSocket } from '../rooms/spectators'
-import { armAfkRemoval } from './afkTimers'
+import { armAfkRemoval, armRoomReap } from './afkTimers'
 import { broadcastPlayerDisconnected, broadcastRoomUpdate } from './emit'
 
 // Socket dropped → mark the player offline (seat retained) and broadcast (spec §10).
@@ -21,6 +21,12 @@ export function registerDisconnectHandler(io: Server, socket: Socket): void {
       // haven't come back — a live match is never interrupted (endGame sweeps
       // players who never reconnected).
       armAfkRemoval(io, room.roomId, result.playerId, config.afk.disconnectGraceMs)
+      // If that drop emptied a LIVE match of every connected seat, nobody is left
+      // to drive the hand to its end — arm the orphan reaper so the table doesn't
+      // sit in 'playing' forever. Cancelled the instant any seat reconnects.
+      if (result.room.status === 'playing' && result.room.players.every((p) => p.socketId === null)) {
+        armRoomReap(io, room.roomId, config.afk.orphanReapMs)
+      }
       broadcastPlayerDisconnected(io, room.roomId, result.playerId)
       broadcastRoomUpdate(io, result.room)
       return

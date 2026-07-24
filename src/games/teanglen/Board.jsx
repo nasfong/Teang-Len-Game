@@ -20,10 +20,83 @@ import { applyPlay, applySkip, deriveFlags, mySeatIndex, lowestCard } from './ma
 const FEATURES = DEFAULT_FEATURES
 const TURN_SECONDS = 15
 const SEAT_DIR = ['bottom', 'right', 'top', 'left']
-// Finish-order badges for the end-of-match standings; 4th+ falls back to "#n".
-const MEDALS = ['🥇', '🥈', '🥉']
 
-export default function OnlineBoard({ channel, room, waitingText }) {
+// When a trick resolves (everyone passed), the match nulls `current` at once — it
+// must, since the winner now owes a fresh lead. But blanking the felt the instant
+// the last pass lands robs the table of the moment: nobody sees the combo that took
+// the trick. So the VIEW holds the last trick on the felt for this long before
+// sweeping it to empty, the way a real table — and every polished Teang Len client —
+// does. A new lead supersedes the hold immediately, so it never delays real play.
+const TRICK_HOLD_MS = 1400
+
+/**
+ * The trick to DISPLAY, which lags the match state by a sweep delay: it mirrors
+ * `gs.current` while a combo is live, but when the trick resolves (current → null)
+ * it keeps the winning combo up for TRICK_HOLD_MS, then clears. Returns
+ * { cards, pile, fromSeat } for TrickPile (fromSeat is absolute; caller rel()s it).
+ * View-only — game logic still reads the real `gs.current`.
+ */
+function useHeldTrick(gs) {
+  const [display, setDisplay] = useState(() => {
+    const cur = gs?.phase === 'playing' ? gs.current : null
+    return { cards: cur?.cards ?? [], pile: gs?.beaten ?? [], fromSeat: gs?.lastPlayer ?? 0 }
+  })
+  const shown = useRef(display.cards.length > 0)
+  const timer = useRef(null)
+
+  useEffect(() => {
+    const current = gs?.phase === 'playing' ? gs.current : null
+    const cancel = () => {
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+      }
+    }
+    if (current) {
+      // A combo is on the table — show it now, and drop any pending sweep (this is a
+      // fresh lead landing during the hold, or an ordinary answer).
+      cancel()
+      shown.current = true
+      setDisplay({ cards: current.cards, pile: gs.beaten, fromSeat: gs.lastPlayer })
+    } else if (shown.current) {
+      // Trick just resolved — keep the winning combo visible, then sweep to empty.
+      cancel()
+      timer.current = setTimeout(() => {
+        timer.current = null
+        shown.current = false
+        setDisplay((d) => ({ ...d, cards: [], pile: [] }))
+      }, TRICK_HOLD_MS)
+    }
+    return cancel
+  }, [gs])
+
+  return display
+}
+
+// The match ends the instant the final card lands. Everyone's hands drop face-up at
+// once so the table reads the final position immediately — but the WINNER moment
+// (banner + medals + crown + confetti) waits this long, so the deciding card and the
+// freshly-revealed hands register before "X wins!" pops. This is the END-of-game
+// hold; TRICK_HOLD_MS is the shorter between-tricks sweep.
+const REVEAL_DELAY_MS = 2600
+
+/** `true` REVEAL_DELAY_MS after `over` turns true; back to `false` at once when it
+ *  clears (a new deal). Gates ONLY the winner banner + celebration — the hand reveal
+ *  is immediate (keyed on `over`). */
+function useDelayedReveal(over) {
+  const [revealing, setRevealing] = useState(false)
+  useEffect(() => {
+    if (!over) {
+      setRevealing(false)
+      return
+    }
+    const t = setTimeout(() => setRevealing(true), REVEAL_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [over])
+  return revealing
+}
+
+export default function OnlineBoard({ channel, room, waitingText, waitingAction = null }) {
   const playerId = channel.playerId
   // Fall back to the room snapshot's persisted gameState so someone who arrives
   // mid-game (a spectator, or a player who took a seat mid-hand) sees the game in
@@ -38,6 +111,17 @@ export default function OnlineBoard({ channel, room, waitingText }) {
   // acts on a stale closure.
   const latest = useRef(gs)
   latest.current = gs
+
+  // What the felt shows — lags the state by a sweep delay so a won trick lingers
+  // before it clears (see useHeldTrick). View-only; logic still uses the real gs.
+  const heldTrick = useHeldTrick(gs)
+
+  // Game over is instant, and so is the hand reveal (keyed on `over`): every seat's
+  // remaining cards drop face-up right away. `revealing` lags it by REVEAL_DELAY_MS
+  // and gates ONLY the winner banner + avatar medals/crown/confetti, so the deciding
+  // card and the revealed hands land a beat before "X wins!" (see useDelayedReveal).
+  const over = Boolean(gs) && gs.phase === 'over'
+  const revealing = useDelayedReveal(over)
 
   useEffect(() => {
     if (channel.timeoutCount === 0) return
@@ -112,35 +196,76 @@ export default function OnlineBoard({ channel, room, waitingText }) {
   const rel = (absSeat) => (absSeat - anchor + n) % n // absolute seat → my-perspective slot
   const abs = (r) => (anchor + r) % n
 
+  // Match-end coin change per player, from the server's settlement (game:end).
+  const deltaById = new Map((channel.settlements ?? []).map((x) => [x.playerId, x.delta]))
+
   // Seats rotated so my (or, spectating, the anchor) seat is slot 0 (bottom).
   const players = Array.from({ length: n }, (_, r) => {
     const s = seatSource[abs(r)]
     const info = infoById.get(s.playerId)
-    return { name: s.name, host: false, afk: info?.isOnline === false, coin: info?.coin }
+    // At match end, each seat wears its finish PLACE on the avatar (Table maps the
+    // number to 🥇🥈🥉/#n) and the 1st-place seat gets the winner crown + halo +
+    // confetti. gs.ranked lists seats in finish order, so place = its index + 1.
+    // Keyed on `revealing`, not `over`, so the badges + celebration arrive WITH the
+    // reveal, after the final-card pause — not the instant the game ends.
+    const place = revealing ? gs.ranked.indexOf(abs(r)) + 1 : 0
+    const delta = deltaById.get(s.playerId) ?? 0
+    // Hold the PRE-settlement balance until the reveal, so the coin rolls up/down at
+    // the same beat the +/− chip appears — not 2.6s earlier when room:update landed.
+    // game:end + room:update arrive in one burst, so info.coin is already the new
+    // balance here; subtracting the delta recovers the old one to roll FROM.
+    const coin = over && !revealing && info?.coin != null ? info.coin - delta : info?.coin
+    return {
+      name: s.name,
+      host: false,
+      afk: info?.isOnline === false,
+      coin,
+      rank: place > 0 ? place : null,
+      winner: place === 1,
+      // The +/− coins, shown with the reveal alongside the placements.
+      coinDelta: revealing ? (delta || null) : null,
+    }
   })
 
-  // The match holds in `over` for the results countdown before the next deal. During
-  // that window every seat's REMAINING cards are turned FACE UP beside their profile
+  // The match holds in `over` for the results countdown before the next deal. Once
+  // the reveal fires, every seat's REMAINING cards turn FACE UP beside their profile
   // so the table can see what everyone was left holding — the standard reveal most
   // online card games do. The final state still carries those hands (a player who
-  // went out has an empty one), so nothing extra has to be relayed.
-  const revealing = Boolean(gs) && gs.phase === 'over'
-  const showHands = playing || revealing
+  // went out has an empty one), so nothing extra has to be relayed. Hands stay on
+  // screen from the moment the game ends (`over`), so nothing blanks during the wait.
+  const showHands = playing || over
 
   // --- playing-only derived values ---
   const current = playing ? gs.current : null
   const myHand = showHands && !isSpectator ? (gs.hands[mySeat] ?? []) : []
-  const isMyTurn = playing && !isSpectator && gs.currentPlayer === mySeat
+  // No turn once the game is over — even in the brief window where the room still
+  // reads 'playing' before its status update lands.
+  const isMyTurn = playing && !over && !isSpectator && gs.currentPlayer === mySeat
+
+  // The trick on the felt: the lingering held trick during play, and the DECIDING
+  // final combo held up through the end-of-game pause (gs.current still holds it at
+  // 'over' in both end paths — a last card played, or an all-pass that left one
+  // player standing) until the reveal takes the centre.
+  const finalTrick = over
+    ? { cards: gs.current?.cards ?? [], pile: gs.beaten ?? [], fromSeat: gs.lastPlayer ?? 0 }
+    : heldTrick
 
   const opponentHands = Array.from({ length: n }, (_, r) => {
     if (!showHands) return null
-    if (r === 0 && !isSpectator) return null // my own hand is the face-up one below
+    // My own seat (slot 0): while PLAYING my hand is the interactive fan on the
+    // front rim, so nothing sits beside the seat. At match end that fan is gone —
+    // so my leftovers are dropped face-up in front of my profile like everyone
+    // else's reveal (Table lands slot 0 at OPP_HAND_POS.bottom). The winner's empty
+    // hand falls through the length check below, so only players still holding
+    // cards — the losers / last places — show a reveal.
+    if (r === 0 && !isSpectator && !over) return null
     const h = gs.hands[abs(r)]
     if (!h || !h.length) return null
-    // Revealed: the whole remaining hand, face up and flat so it reads at a glance
-    // in the small slot beside the seat. Playing: one back with a count badge.
-    return revealing ? (
-      <Hand key={r} cards={h} size="xs" spread={0} curve={0} spacing={13} maxWidth={130} />
+    // Revealed the instant the game ends (`over`): the whole remaining hand, face up
+    // and flat so it reads at a glance in the small slot beside the seat. Playing:
+    // one back with a count badge.
+    return over ? (
+      <Hand key={r} cards={h} size="sm" spread={0} curve={0} spacing={22} maxWidth={300} />
     ) : (
       <Hand key={r} cards={h.slice(0, 1)} faceDown count={h.length} size="sm" />
     )
@@ -191,6 +316,7 @@ export default function OnlineBoard({ channel, room, waitingText }) {
   }
 
   const hint = (() => {
+    if (over) return null // the felt is showing the final card / reveal, not a turn hint
     if (isSpectator) return playing ? `👁 Spectating — ${gs.seats[gs.currentPlayer].name} to play` : '👁 Spectating'
     if (!playing) return null
     if (!isMyTurn) return `Waiting for ${gs.seats[gs.currentPlayer].name}…`
@@ -202,8 +328,21 @@ export default function OnlineBoard({ channel, room, waitingText }) {
   return (
     <div className="flex size-full flex-col">
       <div className="relative flex min-h-0 w-full flex-1 justify-center">
+        {/* Anchored top-LEFT, and BELOW the HUD row. Three things compete for the
+            top of the felt: the top seat's avatar (centred), the Leave button
+            (top-left) and the room pill (top-right) — see TableContainer's HUD. So
+            the pill is the only one that can give way: top-14 clears Leave, and
+            max-w-42% stops it reaching the centred top seat (46% did, once the text
+            was long enough — measured, not eyeballed).
+            KNOWN LIMIT: at 6–8 seats the computed seat ring puts a seat in the
+            upper-left too, and this pill laps it. No fixed position is clear at
+            every seat count — every edge of the felt is spoken for at 8 — so this
+            is tuned for 2–4, which is the only range Teang Len has and the common
+            case for Kanteal. Same fix as Kanteal's board.
+            The comment sits OUT here: inside a `cond && (…)` it is a second
+            expression and the build fails. (Hit for the third time in this repo.) */}
         {(message || hint) && (
-          <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-4">
+          <div className="pointer-events-none absolute top-14 left-3 z-30 flex max-w-[42%] px-1">
             <span className="max-w-full truncate rounded-full border border-white/15 bg-black/55 px-4 py-1 font-display text-sm text-white/90 [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
               {message || hint}
             </span>
@@ -213,18 +352,19 @@ export default function OnlineBoard({ channel, room, waitingText }) {
         <Table
           fill
           players={players}
-          currentTurn={playing ? rel(gs.currentPlayer) : -1}
-          turnSeconds={playing ? TURN_SECONDS : undefined}
+          currentTurn={playing && !over ? rel(gs.currentPlayer) : -1}
+          turnSeconds={playing && !over ? TURN_SECONDS : undefined}
           turnKey={playing ? gs.turnKey : 0}
           opponentHands={opponentHands}
           hand={
-            showHands && !isSpectator ? (
-              // While revealing, my leftovers are shown but inert — no selecting a
-              // card during the results countdown.
+            playing && !over && !isSpectator ? (
+              // Only while PLAYING. The instant the game ends my fan is replaced by my
+              // leftovers dropped face-up in front of my profile, like everyone else's
+              // reveal (opponentHands slot 0 → Table's OPP_HAND_POS.bottom).
               <Hand
                 cards={myHand}
-                selected={revealing ? [] : selected}
-                onSelect={revealing ? undefined : toggle}
+                selected={selected}
+                onSelect={toggle}
                 size="md"
                 spread={0}
                 curve={0}
@@ -241,36 +381,38 @@ export default function OnlineBoard({ channel, room, waitingText }) {
           }
         >
           {revealing ? (
-            // Final standings stay up for the whole countdown, next to the reveal.
-            <div className="flex flex-col items-center gap-1 rounded-2xl border border-white/15 bg-black/60 px-4 py-2 text-center backdrop-blur-[2px]">
-              {gs.ranked.map((seat, i) => (
-                <span
-                  key={seat}
-                  className="font-display text-sm leading-tight text-white [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]"
-                >
-                  {MEDALS[i] ?? `#${i + 1}`} {gs.seats[seat]?.name}
-                </span>
-              ))}
+            // Placements now sit on each avatar (Table's rank badges), so the felt
+            // centre only needs a slim result line + the next-game countdown — no
+            // standings box crowding the reveal. gs.ranked[0] is the winner.
+            <div className="flex flex-col items-center gap-1 text-center">
+              <span className="rounded-full border border-[#FFD27A]/50 bg-black/60 px-4 py-1.5 font-display text-sm text-[#FFD27A] [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+                🏆 {gs.seats[gs.ranked[0]]?.name} wins!
+              </span>
               {waitingText && (
-                <span className="mt-0.5 font-display text-xs text-[#FFD27A] [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+                <span className="font-display text-xs text-white/85 [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
                   {waitingText}
                 </span>
               )}
-            </div>
-          ) : playing ? (
+             {waitingAction}</div>
+          ) : playing || over ? (
+            // The trick pile — through play (the lingering held trick) AND the
+            // end-of-game pause, where it holds the DECIDING final combo on the felt
+            // until the reveal above takes over.
             <TrickPile
-              cards={current?.cards ?? []}
-              pile={gs.beaten}
+              cards={finalTrick.cards}
+              pile={finalTrick.pile}
               size="sm"
-              from={SEAT_DIR[rel(gs.lastPlayer)]}
+              from={SEAT_DIR[rel(finalTrick.fromSeat)]}
               emptyText={gs.currentPlayer === mySeat ? 'Your lead' : `${gs.seats[gs.currentPlayer].name} to lead`}
             />
           ) : (
-            // Countdown / waiting message in the centre of the felt.
-            <div className="flex flex-col items-center gap-1 text-center">
+            // Countdown / waiting message in the centre of the felt, with the host's
+            // "Start now" (waitingAction) stacked directly beneath it.
+            <div className="flex flex-col items-center gap-2 text-center">
               <span className="font-display text-base text-white [--stroke-color:#1B4E86] [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
                 {waitingText}
               </span>
+              {waitingAction}
             </div>
           )}
         </Table>

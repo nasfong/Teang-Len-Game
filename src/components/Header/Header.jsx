@@ -15,11 +15,11 @@ import CoinIcon from '../CoinIcon/CoinIcon.jsx'
 // EDGE color = #00376B, panel blue = #2B7FC9.
 
 // Chunky outlined display text (title/subtitle) — outline via text-stroke.
-const TITLE = 'font-display text-[24px] [--stroke-color:#00376B] tall:text-[32px]'
+const TITLE = 'font-display text-[20px] [--stroke-color:#00376B] tall:text-[32px]'
 
 // Pill bar behind the username / coin balance. Narrower + shorter on compact.
 const BAR =
-  'flex h-7 w-[200px] items-center rounded-[20px_44px_44px_20px] bg-black/25 pl-10 tall:h-8 tall:w-[260px] tall:pl-12'
+  'flex h-6 w-[170px] items-center rounded-[20px_44px_44px_20px] bg-black/25 pl-9 tall:h-8 tall:w-[260px] tall:pl-12'
 const BAR_TEXT = 'font-display text-sm leading-none tracking-[0.4px] [text-shadow:0_1px_4px_rgba(0,0,0,0.55)] tall:text-base'
 
 // Right-hand angled panel — clip-path cuts the diagonal left edge; the stacked
@@ -29,14 +29,16 @@ const BAR_TEXT = 'font-display text-sm leading-none tracking-[0.4px] [text-shado
 // change PANEL_H and the four bottom points move with it (the corner curve keeps
 // its 2/6/11px offsets off the bottom edge). The SVG below hand-traces this same
 // edge to draw the border — re-cut both together or the line peels off the edge.
-// The panel shrinks 110px → 88px (×0.8) on compact screens. Its clip-path bottom
-// coords are tied to that height, so each size gets its own polygon (the 88px set
-// is the 110px set scaled 0.8); the SVG border below scales with the panel via
-// h-full, so the traced edge tracks both automatically.
+// The panel shrinks 110px → 72px on a compact (phone-landscape) screen — smaller
+// than it once was, to give the home content more of a short viewport. Its clip-path
+// bottom coords are tied to that height, so each size gets its own polygon. The
+// three sets (72 / 110) share the SAME proportions — the shape is scale-invariant —
+// which is why the SVG border below, drawn once in a 110-tall viewBox and scaled to
+// the panel via h-full, traces whichever height is active without a second path.
 const PANEL = [
-  'relative flex h-[88px] items-center gap-3 bg-[#2B7FC9] pr-[max(1.25rem,env(safe-area-inset-right))] pl-6 tall:h-[110px] tall:gap-4 tall:pr-[max(1.75rem,env(safe-area-inset-right))] tall:pl-8',
+  'relative flex h-[72px] items-center gap-2.5 bg-[#2B7FC9] pr-[max(1.25rem,env(safe-area-inset-right))] pl-5 tall:h-[110px] tall:gap-4 tall:pr-[max(1.75rem,env(safe-area-inset-right))] tall:pl-8',
   'border-b-[3px] border-black shadow-[inset_0_-3px_0_rgba(0,0,0,0.25)]',
-  '[clip-path:polygon(29px_88px,23px_86px,19px_83px,18px_79px,0_0,100%_0,100%_88px)]',
+  '[clip-path:polygon(24px_72px,19px_70px,16px_68px,15px_65px,0_0,100%_0,100%_72px)]',
   'tall:[clip-path:polygon(36px_110px,29px_108px,24px_104px,22px_99px,0_0,100%_0,100%_110px)]',
   '[filter:drop-shadow(-3px_0_0_#00376B)_drop-shadow(0_4px_0_#00376B)_drop-shadow(0_7px_6px_rgba(0,0,0,0.35))]',
 ].join(' ')
@@ -66,11 +68,10 @@ export default function Header({
   const Panel = onProfile ? 'button' : 'div'
 
   return (
-    <div className="h-[98px] w-full tall:h-[120px]">
-      {/* Main strip — 80% height (96px), top-aligned. `items-stretch` lets the logo
-          tab fill the strip, while the 110px panel keeps its own height and hangs
-          14px below it. The wrapper still reserves 120px, so there's a 10px gap
-          under the panel — drop the wrapper to h-[110px] to close it. */}
+    <div className="h-20 w-full tall:h-30">
+      {/* Main strip — 80% height, top-aligned. `items-stretch` lets the logo tab fill
+          the strip, while the panel keeps its own height and hangs below it. The
+          wrapper reserves a little extra so the panel's drop-shadow isn't clipped. */}
       {/* The bar fills edge-to-edge; the safe-area inset lives INSIDE the badge
           (left) and panel (right) instead of on this row — so both shapes still
           bleed to the screen edge on a landscape notch, and only their CONTENT is
@@ -108,11 +109,14 @@ export default function Header({
             <path d="M 5 0 L 27 99 L 29 104 L 34 108 L 41 110" stroke="rgba(255,255,255,0.3)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           </svg>
 
-          {/* Avatar — overlaps the front of both stacked bars */}
-          <Avatar name={username} src={avatarSrc} size="lg" className="z-3 -mr-9 tall:-mr-11" />
+          {/* Avatar — overlaps the front of both stacked bars. Two sizes: md fits the
+              72px compact panel, lg the 110px tall one. Only one renders per
+              breakpoint (the other is display:none), so it can't add a stray gap. */}
+          <Avatar name={username} src={avatarSrc} size="md" className="z-3 -mr-8 tall:hidden" />
+          <Avatar name={username} src={avatarSrc} size="lg" className="z-3 -mr-11 hidden tall:block" />
 
           {/* Stacked bars — username + coin balance */}
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-1.5 tall:gap-2.5">
             <div className={BAR}>
               <span className={`${BAR_TEXT} text-white`}>{username}</span>
             </div>

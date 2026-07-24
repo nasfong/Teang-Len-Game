@@ -4,7 +4,7 @@ import { roomJoinSchema, roomPlayerSchema } from '../types/schemas'
 import { getUserById } from '../modules/user/userStore'
 import * as roomService from '../services/roomService'
 import { addSpectator, removeSpectatorSocket } from '../rooms/spectators'
-import { cancelAfkRemoval } from './afkTimers'
+import { cancelAfkRemoval, cancelRoomReap } from './afkTimers'
 import { broadcastLobbyUpdate, broadcastRoomUpdate } from './emit'
 import { parsePayload } from './parsePayload'
 
@@ -27,6 +27,9 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
     // They're back (or newly here) — call off any pending AFK eviction. This is the
     // reconnect path too: useRoomChannel re-emits room:join on every reconnect.
     cancelAfkRemoval(data.roomId, data.playerId)
+    // Any reconnecting seat also stands the orphan reaper down — the room has a
+    // live client again to drive the hand.
+    if (role === 'player') cancelRoomReap(data.roomId)
     socket.join(data.roomId)
     broadcastRoomUpdate(io, room)
   })

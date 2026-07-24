@@ -103,3 +103,10 @@ export interface Ranking {
   playerId: string
   rank: number
 }
+
+// The coin change one player took from the match settlement — broadcast in game:end
+// so clients can show a +/− on each seat. Positive = won, negative = lost.
+export interface Settlement {
+  playerId: string
+  delta: number
+}

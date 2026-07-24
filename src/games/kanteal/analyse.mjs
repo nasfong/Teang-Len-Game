@@ -47,8 +47,8 @@ function playOut(n, rules, hoardAbove = null) {
   let guard = 0
   // §3's placeholder only decides something when a cycle ENDS with no beat in it.
   // `leader` is cleared by endCycle, so it has to be sampled from the state BEFORE
-  // each transition — reading hasBeaten afterwards can't tell us, because opening
-  // sets that flag too.
+  // each transition — a post-transition read can't tell an uncontested cycle from a
+  // beaten one.
   let uncontestedCycles = 0
   let finalCycleUncontested = false
   // §4's headline is GAME-scoped — "the player who makes the latest successful beat
@@ -110,7 +110,7 @@ const row = (label, r) =>
 
 console.log(`\nKanteal balance — ${GAMES} games per row, all seats played by the bot\n`)
 
-console.log('§6 THE 2-CARD CUT, as shipped (faceUpAt 2, opening counts)')
+console.log('§6 THE SUCCESSFUL-BEAT CUT, as shipped (faceUpAt 2)')
 console.log('  players                  cut   §4B   cycles')
 for (const n of [2, 3, 4, 5, 6, 8]) console.log(row(`${n} players`, sample(n, DEFAULT_RULES)))
 
@@ -118,10 +118,13 @@ console.log('\n§6 KNOB 1 — the threshold, at 4 players')
 console.log('  faceUpAt                 cut   §4B   cycles')
 for (const f of [1, 2, 3]) console.log(row(`${f} card${f === 1 ? '' : 's'}`, sample(4, { ...DEFAULT_RULES, faceUpAt: f })))
 
-console.log('\n§6 KNOB 2 — does opening count as a beat? (4 players)')
-console.log('  openingCountsAsBeat      cut   §4B   cycles')
+console.log('\n§6 KNOB 2 — does an uncontested open bank a successful beat? (4 players)')
+console.log('  Winning a cycle is what banks the beat, and openerWinsUncontestedCycle')
+console.log('  decides whether an uncontested open wins its cycle at all — so it also')
+console.log('  decides whether that open protects the opener under the successful-beat rule.')
+console.log('  openerWinsUncontestedCycle  cut   §4B   cycles')
 for (const b of [true, false])
-  console.log(row(String(b), sample(4, { ...DEFAULT_RULES, openingCountsAsBeat: b })))
+  console.log(row(String(b), sample(4, { ...DEFAULT_RULES, openerWinsUncontestedCycle: b })))
 
 console.log('\n§6 HOW MUCH DOES STRATEGY MATTER? (4 players, shipped rules)')
 console.log('  A seat that HOARDS declines beats that would spend a high card — which is')

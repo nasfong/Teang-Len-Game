@@ -24,7 +24,7 @@ VITE_API_URL ?= https://teang-len-api.nasfong.com
 # Testing builds only: `true` auto-registers a throw-away account on first visit
 # so the site opens straight on Home. Keep `false` for production images, e.g.
 #   make push-web TAG=testing VITE_API_URL=https://api-test.example.com VITE_AUTO_GUEST=true
-VITE_AUTO_GUEST ?= false
+VITE_AUTO_GUEST ?= true
 
 BUILDX = docker buildx build --platform $(PLATFORM)
 

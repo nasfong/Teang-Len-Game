@@ -17,6 +17,7 @@ import { useState } from 'react'
 import Button from './Button/Button.jsx'
 import Card from './Card/Card.jsx'
 import Header from './Header/Header.jsx'
+import TopBar from './TopBar/TopBar.jsx'
 import Table from './Table/Table.jsx'
 import SquareToggle from './SquareToggle/SquareToggle.jsx'
 import TextField from './TextField/TextField.jsx'
@@ -224,6 +225,23 @@ const ButtonPreview = () => (
       </Button>
     </div>
 
+    {/* xs — the smallest tier, for dense rows (e.g. a lobby TopBar action). */}
+    <div className="flex items-center gap-3">
+      <Button variant="lime" size="xs" outline="navy">
+        Create Room
+      </Button>
+      <Button variant="blue" size="xs" outline="navy">
+        Join
+      </Button>
+      <Button shape="circle" size="xs" variant="blue" outline="navy" aria-label="Back">
+        <BackIcon />
+      </Button>
+      <Button shape="icon" size="xs" variant="red" aria-label="Close" glossy={false}>
+        ✕
+      </Button>
+      <span className="font-display text-xs tracking-wider text-white/70 uppercase">size="xs"</span>
+    </div>
+
     {/* shape="circle" — icon on its own, no label. md is the 46px Back button. */}
     <div className="flex items-center gap-4">
       <Button shape="circle" size="sm" variant="blue" outline="navy" aria-label="Back">
@@ -393,20 +411,22 @@ const HintBubblePreview = () => (
   </div>
 )
 
-// The room list: a grid, like the real lobby. RoomCard sets no width of its own,
-// so the grid is what makes every card match — nothing is hand-sized here. The
-// long name and the 2- vs 4-seat rows prove the cards still come out equal.
-// One room deliberately carries NO `game`, since a single-game lobby passes none
-// and the card must still look right without it.
+// The room list, stacked the way the mobile lobby shows it: full-width horizontal
+// rows. RoomCard sets no width of its own, so the column is what sizes it — nothing
+// is hand-sized. The long name (truncates), the empty room (no avatars), and the
+// 8-seat room (avatars cap at four + a "+N" chip) prove the row stays compact in
+// every case. One room deliberately carries NO `game`, since a single-game lobby
+// passes none and the card must still look right without it.
 const ROOMS = [
   { name: "Dara's Room", game: 'Teang Len', betCoin: 5000, maxPlayers: 4, players: [{ name: 'Dara' }, { name: 'Sophea' }] },
-  { name: 'High Rollers', game: 'Kanteal', betCoin: 10000, maxPlayers: 2, players: [{ name: 'Rith' }, { name: 'Vichea' }] },
+  { name: 'High Rollers', game: 'Kanteal', betCoin: 10000, maxPlayers: 2, players: [{ name: 'Rith' }, { name: 'Vichea' }], status: 'playing' },
   { name: 'Sophea’s Very Long Room Name', game: 'Kanteal', betCoin: 1000, maxPlayers: 4, players: [{ name: 'Sophea' }] },
+  { name: 'Big Table', game: 'Kanteal', betCoin: 8000, maxPlayers: 8, players: [{ name: 'Dara' }, { name: 'Bopha' }, { name: 'Rith' }, { name: 'Mony' }, { name: 'Chan' }, { name: 'Vichea' }] },
   { name: 'Beginners', betCoin: 2000, maxPlayers: 3, players: [] },
 ]
 
 const RoomCardPreview = () => (
-  <div className="grid grid-cols-3 gap-4">
+  <div className="mx-auto flex w-full max-w-md flex-col gap-3">
     {ROOMS.map((room) => (
       <RoomCard key={room.name} {...room} onJoin={() => { }} />
     ))}
@@ -1011,6 +1031,37 @@ const HeaderPreview = () => {
   )
 }
 
+// The flat in-app bar. Shown on a felt strip so the blue reads, with Create Room in
+// the action slot and the avatar wired to the same Profile modal as Header, so the
+// two headers demo identically.
+const TopBarPreview = () => {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="w-full self-start">
+      <div className="overflow-hidden rounded-xl bg-linear-to-b from-[#15324f] to-[#0a1a2b]">
+        <TopBar
+          title="Rooms"
+          coin={ME.coin}
+          username={ME.name}
+          onProfile={() => setOpen(true)}
+          onBack={() => console.log('back')}
+          action={
+            <Button size="sm" variant="lime" outline="navy" onClick={() => console.log('create')}>
+              Create Room
+            </Button>
+          }
+        />
+        <p className="px-4 py-10 text-center font-display text-sm text-white/40 [--stroke-width:0]">
+          one line: back · title · action · coin · profile
+        </p>
+      </div>
+      <Modal open={open} size="sm" onClose={() => setOpen(false)}>
+        <Profile bare {...ME} onLogout={() => setOpen(false)} onEditAvatar={() => console.log('edit avatar')} />
+      </Modal>
+    </div>
+  )
+}
+
 // Purchases are async, so the preview fakes a checkout: busyId locks the grid
 // while one is in flight, which is the state most likely to be got wrong.
 const ShopPreview = () => {
@@ -1309,7 +1360,7 @@ export const components = [
     kind: 'page',
     status: 'wip',
     notes:
-      'The lobby — Header on top, then a frosted glass panel listing open rooms as a responsive, scrollable grid of RoomCards, with a title row (Back + Create Room). Top-level scene: composes Header + Card (glass) + Button + RoomCard. The rooms list and every handler come in as props (rooms[], onJoin, onCreate, onBack, joiningId). Sits over the same full-bleed background as HomePage — the art is what the glass frosts (-z-10 + isolate). The grid scrolls inside the panel (min-h-0), so a long lobby stays on one screen.',
+      'The lobby — a flat one-line TopBar (back · title · coin · profile, Create Room in its action slot), then a frosted glass panel listing open rooms as compact RoomCard rows. Uses TopBar not the tall Header, and folds the old in-panel title row into it, so the glass is all list. Top-level scene: composes TopBar + Card (glass) + Button + RoomCard. Handlers come in as props (rooms[], onJoin, onCreate, onBack, onProfile, joiningId). The page is an exact window height (h-app), so the bar stays pinned and only the grid scrolls (min-h-0).',
     Component: RoomPagePreview,
   },
   {
@@ -1375,6 +1426,14 @@ export const components = [
     Component: HeaderPreview,
   },
   {
+    name: 'TopBar',
+    kind: 'block',
+    status: 'done',
+    notes:
+      'Flat one-line app bar — the space-saving sibling of Header for screens INSIDE the app (the lobby uses it). One ~48px row: optional Back, title (truncates), an `action` slot the page fills (e.g. Create Room), coin, and the avatar as the profile tap. Same report-a-tap contract as Header (onBack/onProfile). Composite: Avatar + Button + CoinIcon. Props: title, coin, username, avatarSrc, onProfile, onBack, action.',
+    Component: TopBarPreview,
+  },
+  {
     name: 'Footer',
     kind: 'block',
     status: 'done',
@@ -1422,7 +1481,7 @@ export const components = [
     name: 'RoomCard',
     kind: 'block',
     status: 'done',
-    notes: 'Lobby room listing — name, stake, player count, seat row, Join. Composite: Card shell + Button. Sets no width of its own: put it in a grid and every card in the loop matches. Props: name, betCoin, maxPlayers, players[], busy, joining, onJoin.',
+    notes: 'Lobby room listing — a compact, mobile-first HORIZONTAL row: name + stake/count pills on the left, seated players as overlapping mini-avatars (capped 4 + "+N"), Join on the right. A third the height of a stacked card, so a short landscape screen shows several. Composite: Card + Button + Avatar. Sets no width of its own: stack it in a column or drop it in a grid and every row matches. Props: name, game, betCoin, maxPlayers, players[], status, busy, joining, onJoin.',
     Component: RoomCardPreview,
   },
   {

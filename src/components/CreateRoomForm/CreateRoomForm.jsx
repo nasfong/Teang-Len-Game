@@ -60,7 +60,7 @@ export default function CreateRoomForm({
   } = useForm({
     mode: 'onTouched',
     resolver: yupResolver(schema),
-    defaultValues: { roomName: defaultName, betAmount: 5000, maxPlayers: 4, gameId: games[0]?.id },
+    defaultValues: { roomName: defaultName, betAmount: 1000, maxPlayers: 4, gameId: games[0]?.id },
   })
 
   const betAmount = watch('betAmount')
@@ -110,17 +110,15 @@ export default function CreateRoomForm({
       </div>
 
       {/* Bet amount — uncontrolled Slider, reported into the form on change. */}
-      <div className="mb-2">
-        <Slider
-          label="Bet Amount"
-          defaultValue={betAmount}
-          onChange={(v) => setValue('betAmount', v, { shouldValidate: true, shouldDirty: true })}
-        />
-      </div>
+      <Slider
+        label="Bet Amount"
+        defaultValue={betAmount}
+        onChange={(v) => setValue('betAmount', v, { shouldValidate: true, shouldDirty: true })}
+      />
 
       {/* Live balance + affordability hint */}
       {showBalance && (
-        <p className={`mb-5 text-right text-[13px] ${OUTLINE} ${unaffordable ? 'text-[#FFB3AC]' : 'text-white/85'}`}>
+        <p className={`mb-2 text-right text-[13px] ${OUTLINE} ${unaffordable ? 'text-[#FFB3AC]' : 'text-white/85'}`}>
           {unaffordable ? 'Not enough coins' : 'Balance'}: <CoinIcon /> {balance.toLocaleString()}
         </p>
       )}
@@ -129,11 +127,11 @@ export default function CreateRoomForm({
           rather than icons: the games are told apart by their rules, and a generic
           card icon for each would say nothing. */}
       {games.length > 1 && (
-        <div className="mb-5 flex items-center gap-3.5">
-          <span className={`text-lg text-white ${OUTLINE}`}>Game</span>
+        <div className="mb-2 flex items-center gap-3.5">
+          <span className={`text-lg text-white text-nowrap ${OUTLINE}`}>Game</span>
           <div className="flex flex-wrap gap-2">
             {games.map((g) => (
-              <SquareToggle key={g.id} active={gameId === g.id} onClick={() => pickGame(g.id)} className="px-3">
+              <SquareToggle key={g.id} active={gameId === g.id} onClick={() => pickGame(g.id)} className="px-3 text-sm">
                 {g.name}
               </SquareToggle>
             ))}
@@ -142,9 +140,9 @@ export default function CreateRoomForm({
       )}
 
       {/* Max players */}
-      <div className="mb-7 flex items-center gap-3.5">
-        <span className={`text-lg text-white ${OUTLINE}`}>Max Players</span>
-        <div className="flex gap-2">
+      <div className="mb-4 flex items-center gap-3.5">
+        <span className={`text-lg text-white text-nowrap ${OUTLINE}`}>Max Players</span>
+        <div className="flex flex-wrap gap-2">
           {seatOptions.map((n) => (
             <SquareToggle key={n} active={maxPlayers === n} onClick={() => setValue('maxPlayers', n, { shouldDirty: true })}>
               {n}

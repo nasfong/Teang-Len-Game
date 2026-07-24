@@ -18,7 +18,7 @@ export default function SquareToggle({ children, active = false, onClick, classN
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`min-w-12 cursor-pointer rounded-[14px] border-[3px] px-1.5 py-2 font-display text-[17px] text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+      className={`min-w-12 cursor-pointer rounded-[14px] border-[3px] px-1.5 py-2 font-display text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
         active ? ON : OFF
       } ${className}`}
       {...props}

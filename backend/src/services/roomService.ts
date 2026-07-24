@@ -241,6 +241,11 @@ export function markDisconnected(room: Room, socketId: string): { room: Room; pl
   if (!p) return null
   p.status = 'disconnected'
   p.socketId = null
+  // Hand the host off if it was them: the host is the only client that fires the
+  // next deal, so a dropped host stalls a waiting room's auto-start until the AFK
+  // timer removes them. reassignHostIfNeeded no-ops when the host is still
+  // reachable, so this is safe to call unconditionally (mid-match included).
+  reassignHostIfNeeded(room)
   bumpVersion(room)
   return { room, playerId: p.playerId }
 }

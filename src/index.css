@@ -54,6 +54,44 @@
      it's unset, and freeze at the fallback — so the length must come from the
      element, not this token. The ring drains itself in CSS — no React re-render. */
   --animate-countdown: countdown 20s linear forwards;
+
+  /* Winning seat's pulsing gold halo → `animate-winner-glow`. Applied to a
+     rounded overlay hugging the avatar at match end (see Table's PlayerSeat). Loops
+     gently — it marks the winner for the whole results countdown, not a one-shot. */
+  --animate-winner-glow: winner-glow 1.4s ease-in-out infinite;
+}
+
+/* Full-screen shell height. Use this on any screen that should fill the window —
+   `min-h-dvh` came up short of the bottom edge in an installed PWA, leaving a band
+   of bare page under the UI. */
+@utility min-h-app {
+  /* 100% of the fixed, full-window #root (below) — the box the boot loader and
+     Preloader use, and the only one that reliably spans the whole window in an
+     installed PWA; viewport units can stop short of it.
+
+     Plain 100%, deliberately — NOT 100vh: on an installed iOS PWA 100vh is the
+     LARGE viewport height, which overshoots the real window (it doesn't subtract
+     the home-indicator inset and goes stale after a launch-time rotation). That
+     made the shell TALLER than #root, so the felt's bottom seats and the hand fan
+     fell below the physical edge. 100% ties the shell to #root, the one box
+     app/appHeight.js pins to the true innerHeight — so it fits exactly. Where no
+     ancestor has a definite height (the workbench preview stage does), this
+     degrades to content height, never to nothing. */
+  min-height: 100vh;
+}
+
+/* DEFINITE full-window height — the fixed-shell counterpart to min-h-app. Use it on
+   a page that must NOT grow past the window: with an exact height, a flex column
+   inside it can hand its overflow to ONE inner scroller (min-h-0 + overflow-y-auto)
+   while the Header and Footer stay pinned. min-h-app (a floor, not a ceiling) lets
+   the column grow to its content, which then scrolls the WHOLE document — Header
+   and all — the moment the content is taller than the window.
+
+   var(--app-h): the real measured window height (app/appHeight.js sets it and #root's
+   inline height to the same value), so the page matches #root exactly. 100% is the
+   pre-JS fallback; #root is a definite box, so it resolves. */
+@utility h-app {
+  height: var(--app-h, 100%);
 }
 
 /* Every `font-display` run is outlined by default — the cartoon "inked" look, so
@@ -72,11 +110,75 @@
    Uses text-stroke rather than a multi-shadow outline so `text-shadow` stays
    free for drop shadows. */
 @layer base {
+  /* The page under everything. Every screen paints its own full-bleed background,
+     but nothing guaranteed what shows THROUGH: the UA default is white, so any
+     strip a screen doesn't cover flashed white — the bottom safe-area band in an
+     installed PWA (no browser chrome to hide it), and iOS's overscroll rubber-band.
+     #0F3358 is the deep end of the house gradient, and the manifest's
+     background_color, so the splash screen hands over to a matching page. */
+  html,
+  body {
+    background-color: #0f3358;
+    /* Replaces the viewport meta's user-scalable=no, which had to go because it
+       suppresses viewport-fit=cover on iOS (see index.html). pan-x/pan-y keeps
+       scrolling and the game's own drags working while dropping pinch-zoom — a
+       mid-hand pinch is only ever an accident in a card game. */
+    touch-action: pan-x pan-y;
+    /* No rubber-band: a drag past the end of a full-screen shell would otherwise
+       peel the UI away from the edge and show that same bare band underneath. */
+    overscroll-behavior: none;
+  }
+
+  /* The app's window box, and the ONE place the window height is decided — shells
+     inside it use min-h-app (100% of this), so getting this box right is what puts
+     the UI against the physical bottom edge.
+
+     Pinned top/left/right and given an explicit height rather than inset-0, because
+     `bottom: 0` resolves against the CSS viewport — which WebKit leaves STALE after
+     a rotation in a home-screen web app, the whole cause of the band along the
+     bottom. Height falls through three sources, weakest first:
+       100%                     plain fallback (the document box)
+       -webkit-fill-available   WebKit's own "space actually available" value
+       inline style from JS     app/appHeight.js, measured off window.innerHeight,
+                                re-read as a rotation settles — the only source that
+                                is right on iOS in every case.
+     overflow-y: auto, NOT hidden: the /component workbench is a long scrolling
+     catalog, and a focused input still needs to be scrolled clear of the on-screen
+     keyboard on the login screen. */
+  #root {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Separate rule so a browser that doesn't know the value keeps the 100% above. */
+  @supports (height: -webkit-fill-available) {
+    #root {
+      height: -webkit-fill-available;
+    }
+  }
+
+  /* Installed app only: iOS ends the viewport ABOVE the home indicator, so every
+     height unit is short by exactly that inset and the strip below shows bare
+     canvas. Add it back, so the bottom bar runs into the indicator area instead of
+     stopping above it. A browser tab's viewport is already correct — hence the
+     display-mode gate. Last, so it wins over the two rules above; the JS in
+     app/appHeight.js sets the same total inline and wins over all of them. */
+  @media (display-mode: standalone), (display-mode: fullscreen) {
+    #root {
+      height: calc(100% + env(safe-area-inset-bottom));
+    }
+  }
+
   .font-display {
     paint-order: stroke;
     /* longhands, not the `-webkit-text-stroke` shorthand — var() substitution
        into that legacy shorthand is unreliable and drops the stroke entirely */
-    -webkit-text-stroke-width: var(--stroke-width, 4px);
+    -webkit-text-stroke-width: var(--stroke-width, 2px);
     -webkit-text-stroke-color: var(--stroke-color, #00376b);
   }
 
@@ -160,6 +262,37 @@
   }
 }
 
+/* One confetti piece falling across the felt at match end (see Confetti.jsx). Each
+   piece carries its own --dx (horizontal drift) and --spin (total rotation); the
+   fall distance is a full viewport height so a piece always crosses the table and
+   is then clipped by the overlay's overflow-hidden. Transform + opacity only, so it
+   composites cheaply. It holds opacity to 80% of the way down, then fades out. */
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--dx, 0), 105vh, 0) rotate(var(--spin, 360deg));
+    opacity: 0;
+  }
+}
+
+/* Gold halo pulsing around the winning seat's avatar. Spread-only box-shadow (no
+   layout), so it's cheap; the ring never leaves a static frame, hence the loop. */
+@keyframes winner-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(255, 210, 122, 0.9), 0 0 14px 3px rgba(255, 210, 122, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 210, 122, 1), 0 0 22px 8px rgba(255, 210, 122, 0.85);
+  }
+}
+
 /* Phone icon miming the turn-to-landscape gesture on the rotate-your-device gate:
    it holds upright, tips a quarter-turn to landscape, holds, then returns — a
    looping hint rather than a single flip. */
@@ -189,5 +322,9 @@
     /* The flight collapses to a plain, still fade — the card still appears, it
        just doesn't travel. `both` preserves the hidden-through-delay behaviour. */
     --animate-drop-in: fade-in 120ms ease-out both;
+    /* The winner halo stops pulsing but must NOT vanish — it's the marker that
+       says who won. Snap to the resting glow and hold it (Confetti.jsx already
+       renders nothing under reduced motion, so the glow carries the moment alone). */
+    --animate-winner-glow: winner-glow 1ms linear forwards;
   }
 }

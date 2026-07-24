@@ -316,8 +316,21 @@ export default function GameTable({ bare = false, fill = false, className = '' }
         {/* In bare mode there's no status line below, so the hint floats as a pill
             near the top of the felt — feedback stays, but nothing hangs off the
             table. Purely presentational, so it never eats a tap (pointer-events). */}
+        {/* Anchored top-LEFT, and BELOW the HUD row. Three things compete for the
+            top of the felt: the top seat's avatar (centred), the Leave button
+            (top-left) and the room pill (top-right) — see TableContainer's HUD. So
+            the pill is the only one that can give way: top-14 clears Leave, and
+            max-w-42% stops it reaching the centred top seat (46% did, once the text
+            was long enough — measured, not eyeballed).
+            KNOWN LIMIT: at 6–8 seats the computed seat ring puts a seat in the
+            upper-left too, and this pill laps it. No fixed position is clear at
+            every seat count — every edge of the felt is spoken for at 8 — so this
+            is tuned for 2–4, which is the only range Teang Len has and the common
+            case for Kanteal. Same fix as Kanteal's board.
+            The comment sits OUT here: inside a `cond && (…)` it is a second
+            expression and the build fails. (Hit for the third time in this repo.) */}
         {bare && (state.message || hint) && (
-          <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-4">
+          <div className="pointer-events-none absolute top-14 left-3 z-30 flex max-w-[42%] px-1">
             <span className="max-w-full truncate rounded-full border border-white/15 bg-black/55 px-4 py-1 font-display text-sm text-white/90 [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
               {state.message || hint}
             </span>
@@ -359,14 +372,18 @@ export default function GameTable({ bare = false, fill = false, className = '' }
           }
         >
           {phase === 'over' ? (
-            // No results modal — the table stays put and a 5s ring in the centre
-            // counts down, then auto-deals the next game. The winner is named in
-            // the status line below.
+            // No results modal — the table stays put and a 60s ring in the centre
+            // counts down, then auto-deals the next game. "Start now" skips the wait
+            // and deals immediately — same action the ring fires on expiry. The
+            // winner is named in the status line below.
             <div className="flex flex-col items-center gap-2 text-center">
-              <TurnTimer seconds={5} size="md" onExpire={() => dispatch({ type: 'reset' })} />
+              <TurnTimer seconds={60} size="md" onExpire={() => dispatch({ type: 'reset' })} />
               <span className="font-display text-sm text-white/90 [--stroke-color:#1B4E86] [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]">
                 New game…
               </span>
+              <Button variant="green" size="sm" onClick={() => dispatch({ type: 'reset' })}>
+                Start now
+              </Button>
             </div>
           ) : (
             <TrickPile

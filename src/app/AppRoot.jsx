@@ -33,8 +33,12 @@ function FriendsRealtime() {
 
 // Held while the testing build signs itself in — the same gradient the login and
 // home screens fall back to, so the handover reads as one continuous screen.
+//
+// fixed inset-0, like the boot loader and the Preloader it hands over from: a
+// min-h-dvh block is laid out in the DOCUMENT, so it stopped short of the bottom
+// safe-area band in an installed PWA and left a strip of page showing.
 function AutoGuestSplash() {
-  return <div className="min-h-dvh w-full bg-linear-to-b from-[#2B7FC9] to-[#0F3358]" />
+  return <div className="fixed inset-0 z-100 bg-linear-to-b from-[#2B7FC9] to-[#0F3358]" />
 }
 
 // AppRoot — the real app (providers + router). Kept in its own module so it lands

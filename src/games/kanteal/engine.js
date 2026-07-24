@@ -77,19 +77,28 @@ export const sortCards = (cards) =>
 export const beatingCards = (hand, table) => hand.filter((c) => canBeat(c, table))
 
 /**
- * Pick a move for a seat. Returns { type: 'play', card } or { type: 'pass', card }.
+ * Pick a move for a seat. Returns { type: 'play' | 'pass', card } or, at the two-card
+ * final challenge, { type: 'commit', upId, downId }. (Round-2 reveals are forced, so
+ * the caller fires applyReveal directly — no bot choice there.)
  *
  * Strategy is deliberately plain — this drives AFK autoplay, not an opponent:
  *  - Beat when you can, with the WEAKEST card that does it, keeping strong cards for
  *    later cycles.
  *  - Otherwise pass your weakest card... except at ≤2 cards, where passing is
  *    illegal (§5) and the weakest card is instead revealed face-up.
+ *  - Committing: play a beater (or the weaker card / an opening) face-up now, and hold
+ *    the STRONGER card back for the Round-2 reveal — the better card to win with later.
  * A legal move therefore always exists, which §5 guarantees by design.
  */
-export function chooseBotMove(hand, table, { mustOpen = false, faceUpAt = FACE_UP_AT } = {}) {
+export function chooseBotMove(hand, table, { mustOpen = false, faceUpAt = FACE_UP_AT, mustCommit = false } = {}) {
   if (!hand.length) return null
   const sorted = sortCards(hand)
   const beats = beatingCards(hand, table).sort((a, b) => rankIdx(a) - rankIdx(b))
+  if (mustCommit && hand.length === 2) {
+    const up = beats.length ? beats[0] : sorted[0]
+    const down = sorted.find((c) => c.id !== up.id)
+    return { type: 'commit', upId: up.id, downId: down.id }
+  }
   if (beats.length) return { type: 'play', card: beats[0] }
   // The opener must play a real card (§3) — passing is not a legal opening.
   if (mustOpen) return { type: 'play', card: sorted[0] }

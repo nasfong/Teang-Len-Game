@@ -27,7 +27,7 @@ export default function TablePage({
   className = '',
 }) {
   return (
-    <div className={`relative isolate min-h-screen w-full overflow-hidden ${className}`}>
+    <div className={`relative isolate min-h-app w-full overflow-hidden ${className}`}>
       {/* Fallback backdrop behind the table — only shows if the felt art hasn't
           painted yet, since the full-bleed table covers it. */}
       {background ? (

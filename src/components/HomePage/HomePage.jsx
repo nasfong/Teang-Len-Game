@@ -16,9 +16,12 @@ import homeBackground from './background.webp'
 // prop and HomePage stays presentational. THE MENU IS THE PAGE'S (see Footer):
 // pass `items` and the tap handlers; HomePage just lays them out.
 //
-// LAYOUT: a min-h-dvh flex column — Header, a flex-1 content area, then Footer.
-// Footer is the last child, so it sits at the bottom with no absolute positioning
-// needed (its own corner tabs anchor inside its box and hug its bottom edge). The
+// LAYOUT: an h-app flex column (an EXACT window height, not a min) — Header, a
+// flex-1 content area, then Footer. The definite height is what lets the content
+// area scroll on its own (min-h-0 + overflow-y-auto) while the Header and Footer
+// stay pinned; a min-height would instead let the column grow and scroll the whole
+// document, Header included. Footer is the last child, so it sits at the bottom with
+// no absolute positioning needed (its own corner tabs anchor inside its box). The
 // background is a real <img> under everything (Vite hashes the filename, so a
 // bg-[url()] class could never name the built path — same reason Table uses an
 // <img>). Pass `background` as an imported image; a gradient stands in without one.
@@ -50,7 +53,7 @@ export default function HomePage({
   className = '',
 }) {
   return (
-    <div className={`relative isolate flex min-h-dvh w-full flex-col overflow-hidden ${className}`}>
+    <div className={`relative isolate flex h-app w-full flex-col overflow-hidden ${className}`}>
       {/* Full-bleed background under everything. object-cover fills any aspect
           without distorting. -z-10 pushes it BEHIND the in-flow Header/Footer (an
           absolute element otherwise paints OVER non-positioned siblings) — which is

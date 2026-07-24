@@ -8,13 +8,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
-    <!-- viewport-fit=cover lets the layout use env(safe-area-inset-*) so the UI
-         clears landscape notches; zoom is locked because this is a game, not a
-         document — pinch-zoom mid-hand is only ever an accident. -->
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
-    />
+    <!-- viewport-fit=cover lets the layout use the whole screen and exposes
+         env(safe-area-inset-*) so the UI clears landscape notches.
+
+         No maximum-scale / user-scalable: on iOS those suppress viewport-fit=cover
+         in a home-screen web app. Zoom control lives in CSS instead — see the
+         touch-action rules in index.css. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Teang Len</title>
     <!-- Installable PWA: "Add to Home Screen" launches WITHOUT browser chrome
          (display: fullscreen) and locked to landscape, so the game runs edge-to-edge

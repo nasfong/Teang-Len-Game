@@ -1,5 +1,5 @@
 import type { Server } from 'socket.io'
-import { getRoom } from '../rooms/roomStore'
+import { deleteRoom, getRoom } from '../rooms/roomStore'
 import * as roomService from '../services/roomService'
 import { broadcastLobbyUpdate, broadcastRoomUpdate } from './emit'
 
@@ -26,13 +26,52 @@ export function cancelAfkRemoval(roomId: string, playerId: string): void {
 }
 
 /** Drop every pending removal for a room — it was deleted, or a match just started
- *  (during play the endGame sweep owns removals, not this timer). */
+ *  (during play the endGame sweep owns removals, not this timer). Also cancels a
+ *  pending orphan reap (a fresh match means the room is live again). */
 export function clearRoomAfkTimers(roomId: string): void {
   for (const k of [...timers.keys()]) {
     if (!k.startsWith(`${roomId}:`)) continue
     clearTimeout(timers.get(k)!)
     timers.delete(k)
   }
+  cancelRoomReap(roomId)
+}
+
+// ── Orphan reap ──────────────────────────────────────────────────────────────
+//
+// A separate, room-level timer for the one case the per-player AFK timer above
+// deliberately ignores: a PLAYING room where EVERY seat has gone offline. The AFK
+// timer never fires during a live match (a connected client bots the missing turns
+// so the hand can finish), but once nobody is connected there's no client to drive
+// it — the hand can never end and endGame() never runs, so the room would sit in
+// 'playing' forever. This reaps it. No wallet settlement: an abandoned hand has no
+// result.
+const reapTimers = new Map<string, NodeJS.Timeout>()
+
+/** Cancel a pending orphan reap — call the moment any seat reconnects. */
+export function cancelRoomReap(roomId: string): void {
+  const timer = reapTimers.get(roomId)
+  if (!timer) return
+  clearTimeout(timer)
+  reapTimers.delete(roomId)
+}
+
+/** Arm the reap for a fully-abandoned playing room. Idempotent (re-arming resets
+ *  the clock). Fires only if the room is STILL playing with every seat offline. */
+export function armRoomReap(io: Server, roomId: string, ms: number): void {
+  cancelRoomReap(roomId)
+  const timer = setTimeout(() => {
+    reapTimers.delete(roomId)
+    const room = getRoom(roomId)
+    if (!room) return
+    // Someone came back, or the hand ended, in the meantime — stand down.
+    if (room.status !== 'playing') return
+    if (room.players.some((p) => p.socketId !== null)) return
+    deleteRoom(roomId)
+    broadcastLobbyUpdate(io) // the table vanishes from the lobby
+  }, ms)
+  timer.unref?.()
+  reapTimers.set(roomId, timer)
 }
 
 /** Start the countdown to remove a disconnected player from a non-playing room. */

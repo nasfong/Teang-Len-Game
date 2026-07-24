@@ -31,6 +31,7 @@ export function useWallet() {
     enabled: Boolean(token),
     queryFn: async () => {
       const wallet = await apiFetch('/api/wallet')
+      console.log("wallet:", wallet)
       setWallet(wallet)
       return wallet
     },

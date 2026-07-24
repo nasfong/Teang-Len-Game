@@ -17,11 +17,18 @@ import { useClaimAdReward } from '../query/rewards'
 import { useProducts } from '../query/shop'
 import { productToPack } from '../net/adapters'
 
-// Content panels enter from the left; the parent staggers them so SelectMode leads
-// and DailyBonus follows.
-const slideFromLeft = {
-  hidden: { x: -70, opacity: 0 },
-  show: { x: 0, opacity: 1, transition: { type: 'spring', stiffness: 240, damping: 24 } },
+// Content panels fade up on entry; the parent staggers them so SelectMode leads and
+// DailyBonus follows.
+//
+// Deliberately a short TWEEN over a small distance, NOT a spring over a big slide —
+// these are drop-shadowed panels, and on an iOS PWA a spring animating a large `x`
+// translate on that subtree overshoots and repaints a wide area every frame, so any
+// hitch reads as stutter (the lighter Header/Footer never showed it). A fixed-length
+// opacity+`y` tween is deterministic, moves less, and stays GPU-composited. Distance
+// is small on purpose: 12px is enough to read as "arriving" without the cost.
+const panelIn = {
+  hidden: { y: 12, opacity: 0 },
+  show: { y: 0, opacity: 1, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } },
 }
 
 // HomeContainer — the landing screen wired to the real session.
@@ -38,7 +45,7 @@ export default function HomeContainer() {
   const navigate = useNavigate()
   const user = useSession(selectUser)
   const coin = useSession(selectCoin)
-  const clear = useSession((s) => s.clear)
+  const signOut = useSession((s) => s.logout)
 
   // Pull a fresh balance into the session on mount.
   useWallet()
@@ -71,7 +78,7 @@ export default function HomeContainer() {
   const displayName = user?.displayName ?? user?.username ?? 'Player'
 
   function logout() {
-    clear()
+    signOut()
     navigate('/login', { replace: true })
   }
 
@@ -109,11 +116,12 @@ export default function HomeContainer() {
           animate="show"
           variants={{ show: { transition: { staggerChildren: 0.15, delayChildren: 0.25 } } }}
         >
-          {/* Each panel slides in from the LEFT, one after the other. */}
-          <motion.div variants={slideFromLeft} className="flex justify-center">
+          {/* Each panel fades up, one after the other. transform-gpu keeps the tween
+              on its own compositor layer so the slide doesn't repaint the panel. */}
+          <motion.div variants={panelIn} className="flex transform-gpu justify-center">
             <SelectMode value={mode} onSelect={setMode} />
           </motion.div>
-          <motion.div variants={slideFromLeft} className="flex w-full max-w-sm justify-center">
+          <motion.div variants={panelIn} className="flex w-full max-w-sm transform-gpu justify-center">
             <DailyBonus value={4} max={7} color="green" progressLabel="4/7 days" onClaim={false} />
           </motion.div>
         </motion.div>

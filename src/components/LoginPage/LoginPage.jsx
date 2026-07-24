@@ -34,7 +34,7 @@ export default function LoginPage({
 
   return (
     <div
-      className={`relative isolate flex min-h-dvh w-full flex-col items-center justify-center gap-3 overflow-hidden px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] py-4 tall:gap-5 tall:py-6 ${className}`}
+      className={`relative isolate flex min-h-app w-full flex-col items-center justify-center gap-3 overflow-hidden px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] py-4 tall:gap-5 tall:py-6 ${className}`}
     >
       {/* Background is blurred so the wordmark + form read cleanly over it. blur
           softens the edges to transparent, so scale-105 over-fills to keep the

@@ -18,6 +18,7 @@ const initialState = {
   room: null, // latest RoomSnapshot
   game: null, // { gameState, version, triggeredBy, turnStartedAt } from game:update
   rankings: null, // set on game:end — non-null means the match is over
+  settlements: null, // set on game:end — [{ playerId, delta }] coin change per seat
   timeoutCount: 0, // bumps on each turn:timeout (the acting client decides what to do)
   error: null, // last server error message
 }
@@ -27,12 +28,18 @@ function reducer(state, action) {
     case 'room':
       return { ...state, room: action.room }
     case 'game':
-      // A fresh game:update supersedes any prior end (a new deal after results).
-      return { ...state, game: action.game, rankings: null }
+      // A fresh game:update supersedes any prior end (a new deal after results) —
+      // clear last match's rankings AND its per-seat coin deltas.
+      return { ...state, game: action.game, rankings: null, settlements: null }
     case 'timeout':
       return { ...state, timeoutCount: state.timeoutCount + 1 }
     case 'end':
-      return { ...state, rankings: action.rankings, game: state.game ? { ...state.game, gameState: action.gameState } : state.game }
+      return {
+        ...state,
+        rankings: action.rankings,
+        settlements: action.settlements ?? null,
+        game: state.game ? { ...state.game, gameState: action.gameState } : state.game,
+      }
     case 'error':
       return { ...state, error: action.message }
     case 'clearError':
@@ -53,7 +60,7 @@ export function useRoomChannel(roomId) {
     const onRoom = ({ room }) => dispatch({ type: 'room', room })
     const onGame = (game) => dispatch({ type: 'game', game })
     const onTimeout = () => dispatch({ type: 'timeout' })
-    const onEnd = ({ rankings, gameState }) => dispatch({ type: 'end', rankings, gameState })
+    const onEnd = ({ rankings, gameState, settlements }) => dispatch({ type: 'end', rankings, gameState, settlements })
     const onError = ({ message }) => dispatch({ type: 'error', message })
 
     socket.on(SERVER_EVENTS.ROOM_UPDATE, onRoom)

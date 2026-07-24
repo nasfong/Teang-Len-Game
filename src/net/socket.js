@@ -20,12 +20,29 @@ export function getSocket() {
     })
 
     // Surface a dropped realtime connection as the global modal (Socket.IO keeps
-    // auto-retrying underneath). A clean (re)connect clears it.
+    // auto-retrying underneath) — but only if it STAYS down. A brief blip that
+    // reconnects within the grace never flashes the modal: we arm a timer on
+    // disconnect and cancel it the moment we're back. A clean (re)connect also
+    // clears any modal already showing.
+    let lostTimer = null
+    const clearLostTimer = () => {
+      if (lostTimer) {
+        clearTimeout(lostTimer)
+        lostTimer = null
+      }
+    }
     socket.on('disconnect', (reason) => {
       if (reason === 'io client disconnect') return // we disconnected on purpose
-      useAppError.getState().showError({ title: 'Connection lost', message: 'Trying to reconnect…' })
+      clearLostTimer()
+      lostTimer = setTimeout(() => {
+        lostTimer = null
+        useAppError.getState().showError({ title: 'Connection lost', message: 'Trying to reconnect…' })
+      }, 2000)
     })
-    socket.on('connect', () => useAppError.getState().clearError())
+    socket.on('connect', () => {
+      clearLostTimer()
+      useAppError.getState().clearError()
+    })
   }
   return socket
 }

@@ -19,8 +19,8 @@ const LOADERS = {
 }
 
 export const catalogue = [
-  { id: 'teanglen', name: 'Teang Len', minPlayers: 2, maxPlayers: 4 },
-  { id: 'kanteal', name: 'Kanteal', minPlayers: 2, maxPlayers: 8 },
+  { id: 'teanglen', name: 'Teang Len(ទៀងលេន)', minPlayers: 2, maxPlayers: 4 },
+  { id: 'kanteal', name: 'Kanteal(កន្ទេល)', minPlayers: 2, maxPlayers: 8 },
 ]
 
 export const DEFAULT_GAME_ID = 'teanglen'

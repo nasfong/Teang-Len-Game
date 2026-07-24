@@ -53,10 +53,18 @@ export default function DailyBonus({
           holds its size (shrink-0) — so a longer line reflows without squeezing the
           art. items-center keeps the icon vertically centred on the copy. */}
       <div className="flex items-center gap-4 mt-2 tall:mt-3">
-        <p className="flex-1 font-display text-sm leading-snug text-white/90 [--stroke-width:2px] [text-shadow:0_1px_2px_rgba(0,0,0,0.4)] tall:text-base">
-          {body}
+        {/* The copy and the meter are SIBLINGS inside this column, not the meter
+            nested in the paragraph. A <p> may only hold phrasing content, and
+            ProgressBar renders a <div> — so the browser was auto-closing the <p>
+            early and re-parenting the meter anyway (React logs it as a hydration
+            error). This is what was already on screen, just spelled correctly, so
+            nothing moves. */}
+        <div className="flex-1">
+          <p className="font-display text-sm leading-snug text-white/90 [--stroke-width:2px] [text-shadow:0_1px_2px_rgba(0,0,0,0.4)] tall:text-base">
+            {body}
+          </p>
           <ProgressBar value={value} max={max} color={color} label={progressLabel} />
-        </p>
+        </div>
         {icon != null && (
           <span className="shrink-0 text-4xl leading-none drop-shadow-[0_3px_4px_rgba(0,0,0,0.4)] [&>img]:size-20 [&>img]:object-contain [&>svg]:size-12 tall:text-5xl tall:[&>img]:size-30 tall:[&>svg]:size-16">
             {icon}

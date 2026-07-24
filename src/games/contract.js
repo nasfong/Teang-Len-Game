@@ -49,10 +49,13 @@
  *   `opts` is game-specific; Teang Len takes `{ startingPlayerId }` for the
  *   server-owned winnerStartsNextGame rule.
  *
- * @property {React.ComponentType<{channel: object, room: object, waitingText?: string}>} Board
+ * @property {React.ComponentType<{channel: object, room: object, waitingText?: string, waitingAction?: React.ReactNode}>} Board
  *   The whole in-room screen for this game — lobby seats AND play, since in this app
  *   they are the same screen. It owns its own layout, so a game that needs a discard
  *   pile or a betting strip just draws one; nothing above it has to make room.
+ *   `waitingAction` is an optional node the room hangs UNDER the pre-game
+ *   `waitingText` (the host's "Start now") — the Board decides where the waiting
+ *   message lives, so it must place the button too rather than have the room guess.
  *
  * @property {(state: object, seat: number) => object|null} bot
  *   Pick a move for a seat and return the NEXT state, or null to stand pat. Drives

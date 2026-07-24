@@ -2,56 +2,64 @@ import PlayingCard from '../../components/PlayingCard/PlayingCard.jsx'
 import { SUIT_MARK } from './match.js'
 
 // The felt's centre for Kanteal — shared by the networked Board and the offline
-// Demo, so the two can never drift on how a cycle is presented. Pure display: it
-// reads state and renders, and decides nothing.
+// Demo, so the two can never drift on how a cycle is presented.
+//
+// It shows the §7 CHALLENGE and, when there is no challenge, the turn HINT. Both
+// belong to the whole table rather than to any one seat. Kanteal has no central
+// discard pile — every card played stays in front of the player who played it
+// (see PlayArea.jsx), the way it would on a real table — so the middle of the felt
+// is empty, which is exactly why the hint can live there.
+//
+// WHY THE CENTRE, for the hint: it used to be an absolutely-positioned pill in a
+// corner, and no corner works. Seats sit on a computed ellipse, so at 6–8 players
+// one of them laps whatever fixed spot you pick (top-centre hides the far seat's
+// avatar; top-left collides with the Leave button). The centre is the one region
+// no seat and no play area can reach at ANY seat count — the play areas ring it at
+// rx=25/ry=24 and the centre sits inside that ring.
+//
+// WHY ONLY WHEN THERE IS NO CHALLENGE: the challenge is a full lg card plus a
+// caption, and that stack already fills most of the vertical space between the
+// play ring's top row and its bottom row. Adding a third element pushes into one
+// of them whichever way it is stacked — above, it meets the far seat's play row;
+// below, it meets the local player's own (the reason the caption is above the card
+// in the first place). Rather than fight for the last few pixels, the hint yields
+// to the challenge, and the caller falls back to the corner pill for the seconds a
+// challenge is up.
+//
+// So a caller must render its corner pill under `gs.challenge` and NOT under
+// `!hint` — the two placements are exclusive, and this file decides which. (That
+// rule is inlined at both call sites rather than exported from here: a non-
+// component export would cost this file its Fast Refresh.)
+//
+// Pure display: it reads state and decides nothing.
 
 const cardLabel = (c) => (c ? `${c.rank}${SUIT_MARK[c.suit]}` : '')
 
-/** The table card, the §7 challenge, and this cycle's reveals. */
-export default function Centre({ gs }) {
-  const { table, challenge, reveals, seats, discards } = gs
-  const hidden = discards.reduce((a, b) => a + b, 0)
+/**
+ * @param gs    Kanteal match state
+ * @param hint  one line of turn guidance ('' / null renders nothing)
+ */
+export default function Centre({ gs, hint = null }) {
+  const { challenge, seats } = gs
+  const showHint = hint && !challenge
+  if (!challenge && !showHint) return null
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      {/* §7 — display only. Names whoever currently holds the challenge; it changes
-          nothing about legality and resets with the cycle. */}
-      {challenge && (
-        <span className="rounded-full border border-[#FFD27A]/60 bg-black/60 px-3 py-0.5 font-display text-xs text-[#FFD27A] [--stroke-width:0]">
-          {seats[challenge.seat].name} challenged with {cardLabel(challenge.card)}
+    <div className="pointer-events-none flex max-w-[62%] flex-col items-center gap-1.5">
+      {showHint && (
+        <span className="max-w-full truncate rounded-full border border-white/15 bg-black/55 px-4 py-1 font-display text-sm text-white/90 [--stroke-width:0] [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
+          {hint}
         </span>
       )}
-
-      <div className="flex items-end gap-3">
-        {table ? (
-          <PlayingCard rank={table.rank} suit={table.suit} size={challenge ? 'lg' : 'md'} />
-        ) : (
-          <div className="flex h-22 w-16 items-center justify-center rounded-lg border-[3px] border-dashed border-white/30">
-            <span className="px-1 text-center font-display text-[11px] leading-tight text-white/50 [--stroke-width:0]">
-              Open the cycle
-            </span>
-          </div>
-        )}
-
-        {/* §5/§7 — cards played face-up that could NOT beat. They sit BESIDE the
-            table card, dimmed, because they took nothing: showing them in the pile
-            would imply they were in contention. */}
-        {reveals.length > 0 && (
-          <span aria-hidden className="flex items-end opacity-55">
-            {reveals.map(({ seat, card }, i) => (
-              <span key={`${card.id}-${seat}`} style={{ marginLeft: i === 0 ? 0 : -28 }}>
-                <PlayingCard rank={card.rank} suit={card.suit} size="sm" />
-              </span>
-            ))}
+      {/* Caption ABOVE the card: below it, it collided with the local player's own
+          play row, which sits at the bottom of the play ring under the centre. */}
+      {challenge && (
+        <>
+          <span className="rounded-full border border-[#FFD27A]/60 bg-black/65 px-3 py-0.5 font-display text-xs text-[#FFD27A] [--stroke-width:0]">
+            {seats[challenge.seat].name} challenged with {cardLabel(challenge.card)}
           </span>
-        )}
-      </div>
-
-      {/* §3 — face-down passes are a COUNT and nothing else. Never render identities. */}
-      {hidden > 0 && (
-        <span className="font-display text-[11px] text-white/45 [--stroke-width:0]">
-          {hidden} card{hidden === 1 ? '' : 's'} discarded face-down
-        </span>
+          <PlayingCard rank={challenge.card.rank} suit={challenge.card.suit} size="lg" />
+        </>
       )}
     </div>
   )

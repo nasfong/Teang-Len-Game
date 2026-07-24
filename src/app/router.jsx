@@ -1,14 +1,18 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { useSession, selectIsAuthed } from '../state/session'
+import { useActiveRoomRecovery } from './useActiveRoomRecovery'
 import LoginContainer from './LoginContainer.jsx'
 import HomeContainer from './HomeContainer.jsx'
 import RoomContainer from './RoomContainer.jsx'
 import TableContainer from './TableContainer.jsx'
 import Workbench from '../App.jsx'
 
-// Signed-in gate — no token bounces to /login.
+// Signed-in gate — no token bounces to /login. Also the one place inside the router
+// tree that every authed screen renders through, so the once-per-launch active-room
+// recovery lives here (it needs useNavigate, i.e. RouterProvider context).
 function RequireAuth() {
   const authed = useSession(selectIsAuthed)
+  useActiveRoomRecovery()
   return authed ? <Outlet /> : <Navigate to="/login" replace />
 }
 

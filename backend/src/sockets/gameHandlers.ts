@@ -2,7 +2,8 @@ import type { Server, Socket } from 'socket.io'
 import { config } from '../config'
 import { CLIENT_EVENTS, SERVER_EVENTS } from '../types/events'
 import { gamePlaySchema, gameSkipSchema, gameStartSchema } from '../types/schemas'
-import type { Ranking } from '../types'
+import type { Ranking, Settlement } from '../types'
+import { getGame } from '../config/games'
 import { settle } from '../modules/wallet/walletService'
 import * as roomService from '../services/roomService'
 import {
@@ -67,9 +68,10 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
 
     if (data.gameOver) {
       const rankings: Ranking[] = data.rankings ?? []
-      // Settle the pot BEFORE game:end so each client's wallet refetch reads it.
-      settlePot(room.roomId, rankings)
-      broadcastGameEnd(io, room.roomId, rankings, room.gameState)
+      // Settle the pot BEFORE game:end so each client's wallet refetch reads it, and
+      // carry the per-player deltas in the event so each seat can show its +/−.
+      const settlements = settlePot(room.roomId, rankings)
+      broadcastGameEnd(io, room.roomId, rankings, room.gameState, settlements)
       const reset = roomService.endGame(room.roomId)
       if (reset) broadcastRoomUpdate(io, reset)
       // endGame may have removed players (queued leaves, never-reconnected) or
@@ -102,16 +104,49 @@ const PAYOUT_MULTIPLIERS: Record<number, number[]> = {
   4: [1, 0.5, -0.5, -1],
 }
 
-// Settle every player's wallet by finishing place at match end. Read the room
-// BEFORE endGame() resets it. Free table (betCoin ≤ 0) is a no-op.
-function settlePot(roomId: string, rankings: Ranking[]): void {
+// Settle every participant's wallet at match end. Read the room BEFORE endGame()
+// resets it; free tables (betCoin ≤ 0) are a no-op. The bet amount and the payout
+// MODEL are server-owned (getGame + room.betCoin) — a client only asserts who
+// placed where via `rankings`, never how much money moves.
+//
+// `rankings` lists exactly the players who were in this hand (a mid-hand joiner
+// sitting the round out isn't in it), so it also defines who is charged.
+function settlePot(roomId: string, rankings: Ranking[]): Settlement[] {
   const room = roomService.get(roomId)
-  if (!room || room.betCoin <= 0) return
+  if (!room || room.betCoin <= 0 || rankings.length === 0) return []
+
+  // Move the coins and record the delta in one place, so the number broadcast to the
+  // seats is exactly the number applied to the wallet (both rounded the same way).
+  const settlements: Settlement[] = []
+  const apply = (playerId: string, delta: number): void => {
+    const rounded = Math.round(delta)
+    if (rounded === 0) return
+    settle(playerId, rounded)
+    settlements.push({ playerId, delta: rounded })
+  }
+
+  if (getGame(room.gameId).payout === 'winner-take-all') {
+    // §4 — one winner (rank 1) sweeps one bet from every other participant. Zero-sum
+    // and seat-count-agnostic (Kanteal seats 2–8), and each loser drops exactly one
+    // bet, the worst case the join-time affordability check already guaranteed. Split
+    // evenly if a game ever ends in a tie for first (Kanteal doesn't, but be safe).
+    const winners = rankings.filter((r) => r.rank === 1)
+    const losers = rankings.filter((r) => r.rank !== 1)
+    if (winners.length === 0 || losers.length === 0) return []
+    const pot = losers.length * room.betCoin
+    const share = Math.floor(pot / winners.length)
+    for (const { playerId } of losers) apply(playerId, -room.betCoin)
+    for (const { playerId } of winners) apply(playerId, share)
+    return settlements
+  }
+
+  // 'placement' — pay each finisher by their rank.
   const multipliers = PAYOUT_MULTIPLIERS[rankings.length]
-  if (!multipliers) return
+  if (!multipliers) return []
   for (const { playerId, rank } of rankings) {
     const multiplier = multipliers[rank - 1]
     if (multiplier == null) continue
-    settle(playerId, multiplier * room.betCoin)
+    apply(playerId, multiplier * room.betCoin)
   }
+  return settlements
 }

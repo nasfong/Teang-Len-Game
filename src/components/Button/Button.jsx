@@ -68,26 +68,26 @@ const NAVY = {
 // fixed square for a circle (icon-only) — one slot, two ways of being sized.
 const SIZES = {
   pill: {
+    xs: { depth: '[--depth:2px]', radius: 'rounded-[14px]', box: 'px-4 py-1.5', text: 'text-sm', sheen: 'top-1 left-1 h-0.5 w-1.5' },
     sm: { depth: '[--depth:3px]', radius: 'rounded-[18px]', box: 'px-6 py-2', text: 'text-lg', sheen: 'top-1.5 left-1 h-0.5 w-2' },
     md: { depth: '[--depth:4px]', radius: 'rounded-[22px]', box: 'px-9 py-2.5', text: 'text-[22px]', sheen: 'top-2 left-1.5 h-1 w-3' },
-    lg: { depth: '[--depth:6px]', radius: 'rounded-[26px]', box: 'px-[50px] py-[15px]', text: 'text-[32px]', sheen: 'top-2.5 left-1.5 h-1 w-3.5' },
+    lg: { depth: '[--depth:5px]', radius: 'rounded-[24px]', box: 'px-[42px] py-[12px]', text: 'text-[28px]', sheen: 'top-2 left-1.5 h-1 w-3' },
     xl: { depth: '[--depth:8px]', radius: 'rounded-[32px]', box: 'px-[64px] py-[20px]', text: 'text-[40px]', sheen: 'top-3 left-2 h-1.5 w-4' },
   },
-  // md is 46px — the size the original floating Back button used.
+
   circle: {
+    xs: { depth: '[--depth:2px]', radius: 'rounded-full', box: 'size-7', text: 'text-sm', sheen: 'top-1 left-1 h-0.5 w-1.5' },
     sm: { depth: '[--depth:3px]', radius: 'rounded-full', box: 'size-9', text: 'text-lg', sheen: 'top-1.5 left-1.5 h-0.5 w-2' },
     md: { depth: '[--depth:4px]', radius: 'rounded-full', box: 'size-[46px]', text: 'text-[22px]', sheen: 'top-2 left-2 h-1 w-3' },
-    lg: { depth: '[--depth:6px]', radius: 'rounded-full', box: 'size-14', text: 'text-[32px]', sheen: 'top-2.5 left-2.5 h-1 w-3.5' },
+    lg: { depth: '[--depth:5px]', radius: 'rounded-full', box: 'size-12', text: 'text-[28px]', sheen: 'top-2 left-2 h-1 w-3' },
     xl: { depth: '[--depth:8px]', radius: 'rounded-full', box: 'size-[72px]', text: 'text-[40px]', sheen: 'top-3 left-3 h-1.5 w-4' },
   },
-  // Icon-only like circle — square box, pill radii (a squircle) — but with inner
-  // PADDING so the icon breathes off the edges. box-border means the p-* eats into
-  // the size, so the box is bumped up to keep a roomy content area: the padding is
-  // the visible ring between the icon and the button edge, not a squeeze on the art.
+
   icon: {
+    xs: { depth: '[--depth:2px]', radius: 'rounded-[14px]', box: 'size-9 p-1', text: 'text-sm', sheen: 'top-1 left-1 h-0.5 w-1.5' },
     sm: { depth: '[--depth:3px]', radius: 'rounded-[18px]', box: 'size-11 p-1.5', text: 'text-lg', sheen: 'top-1.5 left-1.5 h-0.5 w-2' },
     md: { depth: '[--depth:4px]', radius: 'rounded-[22px]', box: 'size-[54px] p-2', text: 'text-[22px]', sheen: 'top-2 left-2 h-1 w-3' },
-    lg: { depth: '[--depth:6px]', radius: 'rounded-[22px]', box: 'size-16 p-2', text: 'text-[32px]', sheen: 'top-2.5 left-2.5 h-1 w-3.5' },
+    lg: { depth: '[--depth:5px]', radius: 'rounded-[22px]', box: 'size-14 p-2', text: 'text-[28px]', sheen: 'top-2 left-2 h-1 w-3' },
     xl: { depth: '[--depth:8px]', radius: 'rounded-[22px]', box: 'size-[90px] p-3', text: 'text-[40px]', sheen: 'top-3 left-3 h-1.5 w-4' },
   },
 }
@@ -136,7 +136,7 @@ const LABEL =
  * Button — chunky 3D game button.
  *
  * @param variant  'lime' | 'green' | 'blue' | 'red'   (default 'green')
- * @param size     'sm' | 'md' | 'lg' | 'xl'           (default 'md')
+ * @param size     'xs' | 'sm' | 'md' | 'lg' | 'xl'    (default 'md')
  * @param sizeTall optional larger size restored at the `tall:` breakpoint
  *                 (min-height:600px). Pass a compact `size` for phones and a
  *                 bigger `sizeTall` for desktop — each geometry class gets a

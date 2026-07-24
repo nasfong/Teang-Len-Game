@@ -20,12 +20,25 @@ import { defaultRules, type GameRules } from './rules'
 // Adding a game: add an entry here and a folder under src/games/. No socket
 // handler, validator or service needs to change.
 
+// How a match's pot is settled at game end. SERVER-OWNED (a client asserts who won,
+// never how much money moves), keyed per game because the games score differently:
+//
+//   'placement'        — every finisher is ranked 1..n and paid by placement via
+//                        PAYOUT_MULTIPLIERS (Teang Len: 1st wins most, last loses a
+//                        full bet). Zero-sum across the table.
+//   'winner-take-all'  — exactly one winner; every other participant loses ONE bet
+//                        and the winner collects them all (Kanteal, §4). Also
+//                        zero-sum, and scales to any seat count (Kanteal seats 2–8),
+//                        which placement multipliers don't.
+export type PayoutModel = 'placement' | 'winner-take-all'
+
 export interface GameDefinition {
   id: string
   name: string
   minPlayers: number
   maxPlayers: number
   turnDurationMs: number
+  payout: PayoutModel
   rules: GameRules
 }
 
@@ -36,6 +49,7 @@ export const games: Record<string, GameDefinition> = {
     minPlayers: 2,
     maxPlayers: 4,
     turnDurationMs: 15_000,
+    payout: 'placement',
     rules: defaultRules,
   },
   kanteal: {
@@ -44,6 +58,9 @@ export const games: Record<string, GameDefinition> = {
     minPlayers: 2,
     maxPlayers: 8,
     turnDurationMs: 20_000,
+    // §4 — Kanteal crowns exactly one winner, so the pot is winner-take-all: each
+    // other player at the table pays one bet and the winner sweeps them.
+    payout: 'winner-take-all',
     // Kanteal has no next-match opener rule of its own: each cycle's winner opens
     // the next cycle, and a new match just starts from seat 0.
     rules: { winnerStartsNextGame: false },

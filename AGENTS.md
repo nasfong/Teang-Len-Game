@@ -69,7 +69,7 @@ too. This is the documented exception to the no-outside-imports rule.
 | | needs |
 | --- | --- |
 | `Header` | Avatar — panel taps report via `onProfile`; the page opens it |
-| `Table` | Avatar, EmoteBubble (+ `table-background.png`). Seats up to 8 |
+| `Table` | Avatar, EmoteBubble (+ `table-background.png`). Seats up to 8 — see Trap 5 |
 | `EmoteBar` | Button |
 | `Footer` | Card, Button — the menu (`items`) is the page's, art and all |
 | `RoomCard` | Card, Button, Avatar |
@@ -92,7 +92,7 @@ they share is the **component library above** — not an engine.
 | game | rules |
 | --- | --- |
 | `teanglen` | Teang Len / Tiến Lên — shedding, combos, tricks, ranks every finisher |
-| `kanteal` | Kanteal (កន្ទេល) — one card per turn, cycles, elimination, one winner. 2–8 players |
+| `kanteal` | Kanteal (កន្ទេល) — one card per turn, cycles, elimination, one winner. 2–8 players. NO central pile: played cards stay in front of their owner all game (`Table`'s `playAreas`). §6 successful-beat rule: you must WIN a completed cycle before you may finish — reaching ≤2 cards with none (`successfulBeats[seat] === 0`) cuts you; a beat that's beaten back counts for nothing (banked at cycle end, see `failsBeatGate`) |
 
 A game module exports one object: `meta`, `createMatch`, `Board`, `bot`,
 `summarize`. That's the whole interface, documented in
@@ -201,6 +201,27 @@ This is the house pattern — `--depth` (Button), `--stroke-color` (global),
 
 `TrickPile` scatters cards from a hash of the card's id, not `Math.random()` —
 otherwise every hover in the Hand would re-shuffle the table.
+
+### 5. On a crowded ring, lay things out *beside* each other — don't co-ordinate them
+
+`Table` places 5–8 seats on a computed ellipse. Each opponent also needs their
+face-down hand card nearby, and free-placing that card cannot be made to work:
+
+- pulled straight in toward the felt, it lands on the **top seats' own name pills**
+- skewed along the arc to clear them, it lands on the **next seat's coin line**
+
+There is no radius that fits — the vertical budget at the top of the ring is about
+**9px**, between the seat's bottom edge and the play row below it, for a card 68px
+tall. Both attempts are in the git history; neither is a tuning problem.
+
+The fix was to stop positioning the card at all: on the ring, `opponentHands[i]`
+renders as a **flex sibling of its seat**, so a card can never overlap the seat it
+sits beside. Which side it takes mirrors the ≤4 layout (`OPP_HAND_POS`) — always
+the felt-facing one. That widened the pair to ~116px, so `RING.rx` came in 45 → 40
+to keep the outermost seats from being clipped by the frame.
+
+Reach for this whenever two absolutely-positioned things keep colliding: making one
+a *sibling* of the other removes the geometry instead of re-tuning it.
 
 ## 📱 Touch first
 

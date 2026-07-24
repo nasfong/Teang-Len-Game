@@ -3,7 +3,7 @@ import { LOBBY_ROOM, SERVER_EVENTS, userRoom } from '../types/events'
 import { toRoomSnapshot } from '../rooms/roomFactory'
 import { listVisibleRooms } from '../services/roomService'
 import { getFriendIds, getFriendState } from '../modules/friend/friendService'
-import type { Ranking, Room } from '../types'
+import type { Ranking, Room, Settlement } from '../types'
 
 // Typed broadcast helpers — all server→client emits funnel through here so event
 // names come only from SERVER_EVENTS and rooms are always snapshotted first.
@@ -34,8 +34,14 @@ export function broadcastPlayerFinished(io: Server, roomId: string, playerId: st
   io.to(roomId).emit(SERVER_EVENTS.PLAYER_FINISHED, { roomId, playerId, rank })
 }
 
-export function broadcastGameEnd(io: Server, roomId: string, rankings: Ranking[], gameState: unknown): void {
-  io.to(roomId).emit(SERVER_EVENTS.GAME_END, { roomId, rankings, gameState })
+export function broadcastGameEnd(
+  io: Server,
+  roomId: string,
+  rankings: Ranking[],
+  gameState: unknown,
+  settlements: Settlement[] = [],
+): void {
+  io.to(roomId).emit(SERVER_EVENTS.GAME_END, { roomId, rankings, gameState, settlements })
 }
 
 export function broadcastPlayerDisconnected(io: Server, roomId: string, playerId: string): void {
