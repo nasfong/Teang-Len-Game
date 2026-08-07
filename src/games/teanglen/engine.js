@@ -317,3 +317,206 @@ function strength(play) {
 }
 
 export { cardId }
+
+// ============================================================================
+// PRO BOT — a materially stronger opponent, built on the SAME primitives as above
+// (classify / canBeat / candidatePlays / playsOfType / strength / isBomb). Pure
+// functions, no new deps, no React/DOM. The greedy `chooseBotMove` is left exactly
+// as it was; everything here is additive, wired in via `chooseBotMovePro`.
+//
+// Three ideas make it stronger than "lowest single always":
+//   1. Leading uses a hand DECOMPOSITION — it partitions the whole hand into the
+//      fewest melds (turns-to-empty) and leads the weakest one, keeping 2s/bombs and
+//      never breaking a pair/run to shed a single.
+//   2. Following is DANGER-AWARE — when an opponent is about to go out it stops
+//      conserving and blocks (strong beat, or a bomb to cut a 2); otherwise it keeps
+//      the greedy weakest-beat, choosing the beat that leaves the best-shaped hand.
+//   3. ENDGAME aggression — when its own hand is small it plays to go out fastest,
+//      spending strong cards / bombs if that clears the hand.
+// ============================================================================
+
+const DANGER_THRESHOLD = 2 // an opponent at/below this many cards is "about to win"
+const ENDGAME_THRESHOLD = 4 // at/below this many cards, the bot plays to go out
+const ORPHAN_BELOW = RANKS.indexOf('J') * 4 // a low lone single is a mild liability
+
+// Highest card value in a set — a meld's "strength" without re-classifying.
+const topValue = (cards) => Math.max(...cards.map(cardValue))
+// Remove a set of cards (by id) from a list, preserving order.
+const removeCards = (list, taken) => {
+  const ids = new Set(taken.map((c) => c.id))
+  return list.filter((c) => !ids.has(c.id))
+}
+// Re-bind a chosen set of cards to the caller's own hand objects (decompose results
+// are memoized and may reference an earlier equal hand — match back by id).
+const fromHand = (hand, cards) => cards.map((c) => hand.find((h) => h.id === c.id) ?? c)
+
+// Every legal meld that INCLUDES `anchor` (the lowest remaining card). Anchoring on
+// the lowest card makes the partition deterministic — each card is placed exactly
+// once — and keeps the branching factor small.
+function combosWithAnchor(remaining, anchor, features) {
+  const combos = [[anchor]] // a lone single is always available
+  const aRank = rankIdx(anchor)
+  const sameRank = remaining.filter((c) => rankIdx(c) === aRank)
+  const others = sameRank.filter((c) => c.id !== anchor.id)
+  if (sameRank.length >= 2) combos.push([anchor, ...others.slice(0, 1)]) // pair
+  if (sameRank.length >= 3) combos.push([anchor, ...others.slice(0, 2)]) // triple
+  if (sameRank.length === 4) combos.push([...sameRank]) // quad
+
+  const byRank = new Map()
+  for (const c of remaining) {
+    if (!byRank.has(rankIdx(c))) byRank.set(rankIdx(c), [])
+    byRank.get(rankIdx(c)).push(c)
+  }
+  // straights (≥3) starting at the anchor's rank — it's the lowest card, so any run
+  // it's in starts here. No 2 (aRank+len ≤ TWO keeps the top rank below 2).
+  for (let len = 3; aRank + len <= TWO; len++) {
+    const ranks = Array.from({ length: len }, (_, k) => aRank + k)
+    if (!ranks.every((r) => byRank.has(r))) break
+    combos.push(ranks.map((r) => (r === aRank ? anchor : byRank.get(r)[0])))
+  }
+  // double sequences (consecutive pairs) starting at the anchor's rank.
+  if (sameRank.length >= 2) {
+    for (let pairs = 2; aRank + pairs <= TWO; pairs++) {
+      const ranks = Array.from({ length: pairs }, (_, k) => aRank + k)
+      if (!ranks.every((r) => (byRank.get(r)?.length ?? 0) >= 2)) break
+      combos.push(ranks.flatMap((r) => (r === aRank ? [anchor, others[0]] : byRank.get(r).slice(0, 2))))
+    }
+  }
+  // full house (one meld instead of a separate triple + pair) — anchor as the triple,
+  // or as half of the pair. The search decides whether it's worth spending the cards.
+  if (features.allowFulu) {
+    if (sameRank.length >= 3) {
+      for (const [r, cards] of byRank) if (r !== aRank && cards.length >= 2) combos.push([anchor, ...others.slice(0, 2), ...cards.slice(0, 2)])
+    }
+    if (sameRank.length >= 2) {
+      for (const [r, cards] of byRank) if (r !== aRank && cards.length >= 3) combos.push([anchor, others[0], ...cards.slice(0, 3)])
+    }
+  }
+  return combos.filter((cards) => classify(cards, features))
+}
+
+// One meld = one turn to shed, so minimizing melds minimizes turns-to-empty. A low
+// lone single is a slight liability, so it costs a hair more — but the integer turn
+// count always dominates (the penalty can never cross a whole meld).
+const meldCost = (combo) => 1 + (combo.length === 1 && cardValue(combo[0]) < ORPHAN_BELOW ? 0.01 : 0)
+
+// Cache decompositions across the whole process — the same hand-shape recurs a lot
+// (leads, and every calm-follow candidate is scored on its resulting shape).
+const _decompCache = new Map()
+
+/**
+ * Partition a hand into the fewest melds (a small memoized recursive search over the
+ * lowest-card anchor). Returns { melds:[[card,…],…], cost }. Not guaranteed optimal,
+ * but far better than treating every card as a single. Exposed for inspection/tuning.
+ */
+export function decompose(cards, features = DEFAULT_FEATURES) {
+  if (!cards.length) return { melds: [], cost: 0 }
+  const outerKey = sortCards(cards).map((c) => c.id).join(',')
+  const cached = _decompCache.get(outerKey)
+  if (cached) return cached
+
+  const memo = new Map()
+  function solve(rem) {
+    if (rem.length === 0) return { melds: [], cost: 0 }
+    const key = rem.map((c) => c.id).join(',')
+    const hit = memo.get(key)
+    if (hit) return hit
+    const anchor = rem[0]
+    let best = null
+    for (const combo of combosWithAnchor(rem, anchor, features)) {
+      const sub = solve(removeCards(rem, combo))
+      const cost = sub.cost + meldCost(combo)
+      if (!best || cost < best.cost) best = { melds: [combo, ...sub.melds], cost }
+    }
+    memo.set(key, best)
+    return best
+  }
+  const result = solve(sortCards(cards))
+  _decompCache.set(outerKey, result)
+  return result
+}
+
+/** How "close to empty" a hand is — its minimum meld count. Lower is better. A pure
+ *  scalar so the follow heuristics are inspectable/tunable. */
+export function scoreHandShape(hand, features = DEFAULT_FEATURES) {
+  return decompose(hand, features).cost
+}
+
+/** Cost of making a play, for the calm-follow choice: leave a well-shaped hand (few
+ *  melds) AND spend weak cards. Lower is better. */
+export function evaluatePlay(hand, cards, context = {}, features = DEFAULT_FEATURES) {
+  return scoreHandShape(removeCards(hand, cards), features) + (0.1 * topValue(cards)) / 4
+}
+
+// Leading: lead the weakest meld from the best decomposition, so 2s/bombs (high
+// strength) are kept for later. If the weakest is a lone single but a nearby low
+// COMBO exists, lead the combo instead — it sheds more and singles are hardest to
+// offload later.
+function leadMove(hand, context, features) {
+  if (hand.length <= 1) return hand.length ? [...hand] : null
+  const { melds } = decompose(hand, features)
+  const ranked = [...melds].sort((a, b) => topValue(a) - topValue(b))
+  const weakest = ranked[0]
+  const chosen =
+    weakest.length === 1 ? (ranked.find((m) => m.length > 1 && topValue(m) - topValue(weakest) <= 8) ?? weakest) : weakest
+  return fromHand(hand, chosen)
+}
+
+// Following: beat-or-pass, tuned by danger and the bot's own hand size.
+function followMove(hand, current, context, features) {
+  const beats = candidatePlays(hand, current)
+    .map((cards) => ({ cards, play: classify(cards, features) }))
+    .filter((b) => b.play && canBeat(b.play, current, features))
+  if (!beats.length) return null // nothing beats it — must pass
+
+  const bombs = beats.filter((b) => isBomb(b.play, current, features))
+  const normals = beats.filter((b) => !isBomb(b.play, current, features))
+  const myCount = hand.length
+  const oppCounts = context.opponentCounts ?? []
+  const minOpp = oppCounts.length ? Math.min(...oppCounts) : Infinity
+  const danger = minOpp <= (context.dangerThreshold ?? DANGER_THRESHOLD)
+  const endgame = myCount <= (context.endgameThreshold ?? ENDGAME_THRESHOLD)
+  const tableIsTwos = (current.type === 'single' || current.type === 'pair') && isTwoCard(current.top)
+
+  // ENDGAME: play to go out. Take a hand-clearing beat if one exists; else shed the
+  // most cards. Bombs are fair game here — clearing the hand ends the game.
+  if (endgame) {
+    const clearing = beats.filter((b) => b.cards.length === myCount)
+    if (clearing.length) return clearing.sort((a, b) => strength(a.play) - strength(b.play))[0].cards
+    return [...beats].sort((a, b) => b.cards.length - a.cards.length || strength(a.play) - strength(b.play))[0].cards
+  }
+
+  // DANGER: an opponent is about to win — block instead of conserving. Cut a 2/2s
+  // with a bomb if we hold one (denies the strongest card in the game); otherwise beat
+  // with a STRONG card (a minimal beat is easy to re-beat). Don't waste bombs off a 2
+  // unless it's this blocking case.
+  if (danger) {
+    if (tableIsTwos && bombs.length) return bombs.sort((a, b) => strength(a.play) - strength(b.play))[0].cards
+    const pool = normals.length ? normals : bombs
+    return pool.sort((a, b) => strength(b.play) - strength(a.play))[0].cards
+  }
+
+  // CALM: conserve. Nobody's in danger, so never spend a bomb — hoard it (pass if a
+  // bomb is the only answer). Among normal beats, pick the one that leaves the best-
+  // shaped hand, tie-broken by the weakest card spent.
+  if (!normals.length) return null
+  return normals
+    .map((b) => ({ b, cost: evaluatePlay(hand, b.cards, context, features) }))
+    .sort((a, b) => a.cost - b.cost || strength(a.b.play) - strength(b.b.play))[0].b.cards
+}
+
+/**
+ * Strong ("pro") opponent move. Same call shape as chooseBotMove plus a `context`:
+ *   context = {
+ *     opponentCounts?: number[]   // remaining card counts of the OTHER live seats
+ *     dangerThreshold?: number    // opponent "about to win" cutoff (default 2)
+ *     endgameThreshold?: number   // own "play to go out" cutoff (default 4)
+ *     history?: unknown           // this trick's plays, accepted but not required
+ *   }
+ * All fields optional with sane defaults, so any existing caller can pass nothing.
+ * Returns the cards to play, or null to pass (only legal when following).
+ */
+export function chooseBotMovePro(hand, current, context = {}, features = DEFAULT_FEATURES) {
+  if (!hand || !hand.length) return null
+  return current ? followMove(hand, current, context, features) : leadMove(hand, context, features)
+}

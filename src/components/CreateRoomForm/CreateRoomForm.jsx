@@ -32,6 +32,9 @@ const schema = yup.object({
   betAmount: yup.number().required().integer().min(1000),
   maxPlayers: yup.number().oneOf(PLAYER_OPTIONS).required(),
   gameId: yup.string(),
+  // When on, the remaining seats are filled with auto-playing bots (like the Kanteal
+  // demo) so the room can start and play through without waiting for real opponents.
+  withBots: yup.boolean(),
 })
 
 /**
@@ -60,12 +63,13 @@ export default function CreateRoomForm({
   } = useForm({
     mode: 'onTouched',
     resolver: yupResolver(schema),
-    defaultValues: { roomName: defaultName, betAmount: 1000, maxPlayers: 4, gameId: games[0]?.id },
+    defaultValues: { roomName: defaultName, betAmount: 1000, maxPlayers: 4, gameId: games[0]?.id, withBots: false },
   })
 
   const betAmount = watch('betAmount')
   const maxPlayers = watch('maxPlayers')
   const gameId = watch('gameId')
+  const withBots = watch('withBots')
 
   const game = games.find((g) => g.id === gameId)
   // Seat counts are per game, so the toggles offer only what the chosen game
@@ -91,7 +95,7 @@ export default function CreateRoomForm({
 
   const submit = handleSubmit((v) => {
     if (unaffordable) return
-    onSubmit?.({ roomName: v.roomName.trim(), betAmount: v.betAmount, maxPlayers: v.maxPlayers, gameId: v.gameId })
+    onSubmit?.({ roomName: v.roomName.trim(), betAmount: v.betAmount, maxPlayers: v.maxPlayers, gameId: v.gameId, withBots: v.withBots })
   })
 
   return (
@@ -149,6 +153,29 @@ export default function CreateRoomForm({
             </SquareToggle>
           ))}
         </div>
+      </div>
+
+      {/* Play with bots — fills the remaining seats with auto-playing bots (like the
+          Kanteal demo), so the room can start and run through on its own. The switch
+          mirrors TextField's password toggle. Default off: a normal room seats humans. */}
+      <div className="mb-4 flex items-center gap-3.5">
+        <span className={`text-lg text-white text-nowrap ${OUTLINE}`}>Play with Bots</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={withBots}
+          aria-label="Play with bots"
+          onClick={() => setValue('withBots', !withBots, { shouldDirty: true })}
+          className={`flex h-6 w-11 items-center rounded-full border-2 border-[#1B4E86] px-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9fe03a] ${
+            withBots ? 'bg-[#9fe03a]' : 'bg-black/30'
+          }`}
+        >
+          <span
+            className={`size-4 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-transform ${
+              withBots ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
       </div>
 
       {/* Actions */}

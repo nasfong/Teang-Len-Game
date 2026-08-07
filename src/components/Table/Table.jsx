@@ -386,14 +386,25 @@ export default function Table({ players = DEFAULT_PLAYERS, currentTurn = 0, turn
       {/* Played cards that stay in front of their owner (see PLAY_RING). Indexed by
           seat like `players`, and INCLUDING seat 0 — the local player's own history
           belongs on the table too. The page builds the nodes, so Table still imports
-          no card component. */}
-      {playAreas.slice(0, seated.length).map((node, i) =>
-        node ? (
-          <div key={i} className="absolute z-10 -translate-x-1/2 -translate-y-1/2" style={playSpot(i, seated.length, ring)}>
+          no card component. A seat that's in the challenge (its `challengeAreas` slot
+          is filled) has its row pulled in toward the felt centre; everyone else sits
+          on the normal play ring. */}
+      {playAreas.slice(0, seated.length).map((node, i) => {
+        if (!node) return null
+        const isChallenge = Boolean(challengeAreas[i])
+        return (
+          <div
+            key={i}
+            // `left`/`top` are what changes when the seat flips in/out of the challenge,
+            // so transitioning just those two slides the whole row between its play spot
+            // and the pulled-in challenge spot. The centring transform stays static.
+            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-[left,top] duration-500 ease-out"
+            style={!isChallenge ? challengeSpot(i, seated.length, ring) : playSpot(i, seated.length, ring)}
+          >
             {node}
           </div>
-        ) : null,
-      )}
+        )
+      })}
 
       {challengeAreas.slice(0, seated.length).map((node, i) =>
         node ? (

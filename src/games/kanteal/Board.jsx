@@ -39,6 +39,12 @@ function autoMove(state, seat) {
 
 const TURN_SECONDS = 20
 
+// A finalist plays four cards, then commits the last two — so a seat's `played` entries
+// beyond the fourth are its final-challenge pair (the face-up Round-1 card, then the
+// Round-2 reveal). Every card leaving a hand pushes exactly one entry, so this holds
+// whatever mix of plays and passes got the seat here. Mirrors Demo.jsx.
+const CHALLENGE_FROM = 4
+
 const cardLabel = (c) => (c ? `${c.rank}${SUIT_MARK[c.suit]}` : '')
 
 export default function KantealBoard({ channel, room, waitingText, waitingAction = null }) {
@@ -167,7 +173,11 @@ export default function KantealBoard({ channel, room, waitingText, waitingAction
     }
   })
 
-  const myHand = showHands && !isSpectator ? (gs.hands[mySeat] ?? []) : []
+  // A committed seat holds its face-down Round-2 card in `hands` until the reveal. Keep
+  // it OUT of the local fan — both cards read as dropped at commit, and the held one is
+  // drawn (hidden) in the challenge stack instead, then revealed there. Mirrors Demo.jsx.
+  const myDownId = gs?.commits?.[mySeat]?.downId ?? null
+  const myHand = showHands && !isSpectator ? (gs.hands[mySeat] ?? []).filter((c) => c.id !== myDownId) : []
   const sortedHand = sortCards(myHand)
   const isMyTurn = playing && !isSpectator && gs.currentPlayer === mySeat && !gs.eliminated[mySeat]
   const legal =
@@ -179,16 +189,23 @@ export default function KantealBoard({ channel, room, waitingText, waitingAction
   const canPlayPicked = isMyTurn && picked && legal.canPlay.some((c) => c.id === picked.id)
   const canPassPicked = isMyTurn && picked && legal.canPass
 
+  // A "finalist" reached the two-card final challenge: not cut, and past its fourth
+  // played card (it has committed). Cut/"teav" seats also end with a full row — their
+  // leftovers are dumped face-down into `played` — so the eliminated guard keeps them
+  // in the normal play row. Mirrors Demo.jsx.
+  const isFinalist = (seat) => showHands && !gs.eliminated?.[seat] && (gs.played?.[seat]?.length ?? 0) > CHALLENGE_FROM
+
   // Every seat's played cards, kept in front of them for the whole game — Kanteal's
   // table has no central pile. Rotated into my-perspective slots like the seats, so
-  // slot 0 (my own history) lands bottom-centre, right above my hand.
+  // slot 0 (my own history) lands bottom-centre, right above my hand. A finalist keeps
+  // only its first four plays here; its challenge pair moves to `challengeAreas`.
   const playAreas = Array.from({ length: n }, (_, r) => {
     if (!showHands) return null
     const seat = abs(r)
     return (
       <PlayArea
         key={r}
-        played={gs.played?.[seat] ?? []}
+        played={isFinalist(seat) ? gs.played[seat].slice(0, CHALLENGE_FROM) : (gs.played?.[seat] ?? [])}
         currentId={gs.table?.id ?? null}
         label={r === 0 ? null : seatSource[seat].name}
         dense={n > 4}
@@ -207,26 +224,28 @@ export default function KantealBoard({ channel, room, waitingText, waitingAction
     if (!showHands) return null
     if (r === 0 && !isSpectator) return null
     const seat = abs(r)
-    // Final challenge: a committed opponent shows the stacked pair — their public
-    // face-up card with the held face-down card peeking beneath — nudged LEFT so it
-    // clears the play area that its face-up card sits in. Not at match end (over),
-    // where the full face-up reveal takes over. The held card's identity is never
-    // rendered (ChallengeStack draws a back), so nothing leaks.
-    if (playing && !over && gs.commits?.[seat] != null) {
-      const upCard = [...(gs.played[seat] ?? [])].reverse().find((e) => e.card)?.card ?? null
-      return (
-        <div key={r} className="translate-x-[-55%]">
-          <ChallengeStack up={upCard} size="sm" />
-        </div>
-      )
-    }
+    // Final challenge: a finalist is drawn as its challenge stack (see `challengeAreas`),
+    // so no hand blob beside the seat while playing. At match end (over) the full
+    // face-up reveal takes over. The held card's identity is never rendered, so nothing
+    // leaks.
+    if (!over && isFinalist(seat)) return null
     const h = gs.hands[seat]
     if (!h || !h.length) return null
     return over ? (
-      <Hand key={r} cards={h} size="xs" spread={0} curve={0} spacing={13} maxWidth={130} />
+      <Hand key={r} cards={h} size="xs" spread={0} curve={0} spacing={20} maxWidth={130} />
     ) : (
-      <Hand key={r} cards={h.slice(0, 1)} faceDown count={h.length} size="sm" />
+      <Hand key={r} cards={h.slice(0, 1)} faceDown count={h.length} size="lg" />
     )
+  })
+
+  // The final-challenge pair, pulled in toward the felt centre: the face-up Round-1
+  // card on top, the held Round-2 card peeking behind it (flips face-up once revealed).
+  // Indexed by my-perspective slot like `playAreas`. Mirrors Demo.jsx.
+  const challengeAreas = Array.from({ length: n }, (_, r) => {
+    const seat = abs(r)
+    if (!isFinalist(seat)) return null
+    const pair = gs.played[seat].slice(CHALLENGE_FROM)
+    return <ChallengeStack key={r} up={pair[0]?.card ?? null} down={pair[1]?.card ?? null} size="sm" />
   })
 
   function pick(id, meta) {
@@ -311,6 +330,7 @@ export default function KantealBoard({ channel, room, waitingText, waitingAction
           turnKey={playing ? gs.turnKey : 0}
           opponentHands={opponentHands}
           playAreas={playAreas}
+          challengeAreas={challengeAreas}
           hand={
             showHands && !isSpectator ? (
               <Hand

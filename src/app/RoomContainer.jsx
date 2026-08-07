@@ -10,6 +10,10 @@ import { useSession, selectUser, selectCoin } from '../state/session'
 import { useWallet } from '../query/auth'
 import { useRooms, useCreateRoom, useJoinRoom } from '../query/rooms'
 import { catalogue } from '../games/index.js'
+import { writeSolo } from '../net/soloGame.js'
+
+// Names for the bot seats in a solo game (seat 0 is the human).
+const BOT_NAMES = ['Sophea', 'Dara', 'Rith', 'Chan', 'Mony', 'Vichea', 'Bopha']
 
 // The Create Room modal's heading art (same treatment as the workbench preview).
 const HEADING_ICON =
@@ -54,6 +58,31 @@ export default function RoomContainer() {
   }
 
   function submitCreate(values) {
+    // Play with Bots → a client-only game against bots, no server room and no other
+    // players (see SoloTableContainer / useSoloChannel). Stash the setup in localStorage
+    // and jump to /solo; the human takes seat 0 and bots fill the rest.
+    if (values.withBots) {
+      const seats = [{ playerId: user?.id, name: displayName }]
+      for (let i = 1; i < values.maxPlayers; i++) {
+        seats.push({ playerId: `solo-bot-${i}`, name: BOT_NAMES[(i - 1) % BOT_NAMES.length] })
+      }
+      writeSolo({
+        roomId: 'solo',
+        config: {
+          roomId: 'solo',
+          name: values.roomName,
+          gameId: values.gameId,
+          betCoin: values.betAmount,
+          maxPlayers: values.maxPlayers,
+          seats,
+          humanCoin: coin,
+        },
+        game: null,
+      })
+      setCreating(false)
+      navigate('/solo')
+      return
+    }
     createRoom.mutate(
       { name: values.roomName, gameId: values.gameId, betCoin: values.betAmount, maxPlayers: values.maxPlayers },
       {

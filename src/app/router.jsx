@@ -5,6 +5,7 @@ import LoginContainer from './LoginContainer.jsx'
 import HomeContainer from './HomeContainer.jsx'
 import RoomContainer from './RoomContainer.jsx'
 import TableContainer from './TableContainer.jsx'
+import SoloTableContainer from './SoloTableContainer.jsx'
 import Workbench from '../App.jsx'
 
 // Signed-in gate — no token bounces to /login. Also the one place inside the router
@@ -33,6 +34,8 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomeContainer /> },
       { path: '/room', element: <RoomContainer /> },
       { path: '/table/:roomId', element: <TableContainer /> },
+      // Client-only "play vs bots" game — no server room (see the CreateRoomForm toggle).
+      { path: '/solo', element: <SoloTableContainer /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },
