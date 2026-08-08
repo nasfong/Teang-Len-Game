@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client'
 import { API_URL } from './config'
-import { useSession } from '../state/session'
-import { useAppError } from '../state/appError'
+import { useSession } from '../stores/session'
+import { useAppError } from '../stores/appError'
 
 // One shared Socket.IO connection for the whole app — the lobby stream today, the
 // game table next. Lazy + manual: nothing connects until a screen calls connect(),

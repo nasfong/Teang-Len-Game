@@ -1,5 +1,5 @@
 import { QueryClient, QueryCache, MutationCache } from '@tanstack/react-query'
-import { useAppError } from '../state/appError'
+import { useAppError } from '../stores/appError'
 
 // One QueryClient for the app. Sensible defaults for a game lobby: don't hammer
 // the server on every window focus, keep data fresh-ish for 30s, retry once — but

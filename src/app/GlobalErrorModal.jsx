@@ -1,6 +1,6 @@
 import Modal from '../components/Modal/Modal.jsx'
 import Button from '../components/Button/Button.jsx'
-import { useAppError } from '../state/appError'
+import { useAppError } from '../stores/appError'
 
 // The one global error popup — a frosted glass card shown whenever the app loses
 // its connection or hits an unexpected server fault (fed by the query cache +

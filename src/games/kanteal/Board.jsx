@@ -164,6 +164,7 @@ export default function KantealBoard({ channel, room, waitingText, waitingAction
       name: cut ? `${s.name} ✕` : s.name,
       host: false,
       afk: info?.isOnline === false,
+      bot: info?.isBot === true,
       coin: info?.coin,
       // §4 — Kanteal crowns exactly ONE winner (no 2nd/3rd), so the only end-of-match
       // badge is the winner's crown + halo + confetti. No `rank` for anyone else.

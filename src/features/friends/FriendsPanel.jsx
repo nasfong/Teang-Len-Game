@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import FriendList from '../components/FriendList/FriendList.jsx'
-import Modal from '../components/Modal/Modal.jsx'
-import Avatar from '../components/Avatar/Avatar.jsx'
-import Button from '../components/Button/Button.jsx'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import FriendList from '../../components/FriendList/FriendList.jsx'
+import Modal from '../../components/Modal/Modal.jsx'
+import Avatar from '../../components/Avatar/Avatar.jsx'
+import Button from '../../components/Button/Button.jsx'
 import {
   useAcceptRequest,
   useFriends,
@@ -10,8 +11,8 @@ import {
   useRemovePending,
   useSendRequest,
   useUserSearch,
-} from '../query/friends'
-import { useInviteToRoom } from '../query/rooms'
+} from '../../api/useFriends'
+import { useInviteToRoom } from '../../api/useRooms'
 
 const STATUS_LABEL = { online: 'Online', playing: 'In game', offline: 'Offline' }
 const STATUS_TONE = { online: 'text-[#7CE04A]', playing: 'text-[#FFD27A]', offline: 'text-white/55' }
@@ -51,16 +52,11 @@ function FriendProfileModal({ friend, onClose, onRemove, removing }) {
 // per-friend Invite action (invite that friend into the room).
 export default function FriendsPanel({ roomId, title = 'Friends' }) {
   const [search, setSearch] = useState('')
-  const [debounced, setDebounced] = useState('')
   const [selected, setSelected] = useState(null) // friend whose profile popup is open
   const [invitedIds, setInvitedIds] = useState([]) // friends we've rung into the room
 
-  // Debounce so we don't fire a request on every keystroke. 300ms is the usual
-  // sweet spot — long enough to coalesce typing, short enough to feel instant.
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(search), 300)
-    return () => clearTimeout(id)
-  }, [search])
+  // Debounced so we don't fire a request on every keystroke.
+  const debounced = useDebouncedValue(search)
 
   const friends = useFriends()
   const results = useUserSearch(debounced)

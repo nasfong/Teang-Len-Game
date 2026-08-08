@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AUTO_GUEST_ENABLED, ensureAutoGuestSession } from '../net/autoGuest'
-import { useSession, selectIsAuthed, selectManualSignOut } from '../state/session'
+import { AUTO_GUEST_ENABLED, ensureAutoGuestSession } from './autoGuest'
+import { useSession, selectIsAuthed, selectManualSignOut } from '../../stores/session'
 
 // Drives the auto-guest sign-in on testing builds, and tells AppRoot whether to
 // hold the router back while it's in flight (so the login screen never flashes).

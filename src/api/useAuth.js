@@ -1,21 +1,19 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { apiFetch } from '../net/api'
-import { useSession } from '../state/session'
+import * as authService from '../services/auth'
+import { useSession } from '../stores/session'
+import { queryKeys } from './keys'
 
 // Auth server-state, via TanStack Query.
 //
 // login/register are MUTATIONS: they call the backend and, on success, write the
 // returned session ({ token, user, wallet }) into the Zustand session store —
 // which is what every screen reads. AuthForm reports mode 'login' | 'register',
-// mapping straight to the two endpoints.
+// which authService maps to the two endpoints.
 export function useAuth() {
   const setSession = useSession((s) => s.setSession)
 
   return useMutation({
-    mutationFn: ({ mode, username, password }) => {
-      const path = mode === 'register' ? '/api/auth/register' : '/api/auth/login'
-      return apiFetch(path, { method: 'POST', auth: false, body: { username, password } })
-    },
+    mutationFn: authService.authenticate,
     onSuccess: (data) => setSession(data),
   })
 }
@@ -27,11 +25,10 @@ export function useWallet() {
   const setWallet = useSession((s) => s.setWallet)
 
   return useQuery({
-    queryKey: ['wallet'],
+    queryKey: queryKeys.wallet,
     enabled: Boolean(token),
     queryFn: async () => {
-      const wallet = await apiFetch('/api/wallet')
-      console.log("wallet:", wallet)
+      const wallet = await authService.getWallet()
       setWallet(wallet)
       return wallet
     },

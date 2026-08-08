@@ -1,5 +1,5 @@
 import { API_URL } from './config'
-import { useSession } from '../state/session'
+import { useSession } from '../stores/session'
 
 // Thin fetch wrapper over the backend's `{ ok, data | error }` envelope. Attaches
 // the Bearer token from the session store, unwraps `data` on success, and throws

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import Button from '../components/Button/Button.jsx'
 import CoinIcon from '../components/CoinIcon/CoinIcon.jsx'
-import { useInvites } from '../state/invites'
-import { useSession } from '../state/session'
-import { useJoinRoom } from '../query/rooms'
-import { getSocket } from '../net/socket'
-import { SERVER_EVENTS } from '../net/events'
+import Notice from '../components/Notice/Notice.jsx'
+import { useInvites } from '../stores/invites'
+import { useSession } from '../stores/session'
+import { useJoinRoom } from '../api/useRooms'
+import { getSocket } from '../services/socket'
+import { SERVER_EVENTS } from '../services/events'
 import { router } from './router.jsx'
 
 // Listens for `room:invite` pushes and stacks the live invites into the store.
@@ -69,9 +70,9 @@ function InviteCard({ invite, onClose }) {
       </div>
 
       {error && (
-        <p className="mt-2 rounded-lg bg-red-600/90 px-2 py-1 text-center font-display text-xs text-white [--stroke-width:0]">
+        <Notice size="sm" className="mt-2">
           {error}
-        </p>
+        </Notice>
       )}
 
       <div className="mt-2.5 flex justify-end gap-2">

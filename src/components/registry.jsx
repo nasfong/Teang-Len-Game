@@ -51,6 +51,7 @@ import SelectMode from './SelectMode/SelectMode.jsx'
 import ProgressBar from './ProgressBar/ProgressBar.jsx'
 import DailyBonus from './DailyBonus/DailyBonus.jsx'
 import Badge from './Badge/Badge.jsx'
+import Notice from './Notice/Notice.jsx'
 // The lobby's glass panel needs art behind it to frost — reuse HomePage's landing
 // background for the RoomPage preview.
 import homeBackground from './HomePage/background.webp'
@@ -1284,6 +1285,17 @@ const RoomPagePreview = () => {
 
 // The in-game screen: TablePage hosts the GameTable board under a HUD. Leaving is
 // reported, so the page owns the confirm modal — a hand mid-play is real stakes.
+// Notice — the shared message pill. Positioning is the CALLER's, so the preview
+// stacks them in flow rather than floating one.
+const NoticePreview = () => (
+  <div className="flex w-full max-w-sm flex-col gap-2">
+    <Notice>Could not join the room.</Notice>
+    <Notice tone="success">🎉 +500 coins!</Notice>
+    <Notice tone="neutral" size="sm">Waiting for another player…</Notice>
+    <Notice size="lg">Room is full.</Notice>
+  </div>
+)
+
 const TablePagePreview = () => {
   const [leaving, setLeaving] = useState(false)
 
@@ -1385,6 +1397,14 @@ export const components = [
     notes:
       'Reward panel — heading, a line of body copy with an icon to its right (flex row), a progress meter, and an optional Claim button. Composite: Card + ProgressBar + Button. Fully config-driven (every string/icon/amount is a prop) so the same shell serves a login streak, a battle-pass tier, an event goal. `icon` is any node (emoji/img/svg). Props: heading, body, icon, value, max, color, progressLabel, onClaim, claimLabel, claimed.',
     Component: DailyBonusPreview,
+  },
+  {
+    name: 'Notice',
+    kind: 'component',
+    status: 'done',
+    notes:
+      'The one inline message pill — a failed join, a rejected create, a claimed reward. Self-contained, Tailwind-only. Replaces the hand-rolled red/gold strips that each screen used to write inline (and that had drifted apart in padding and opacity). Deliberately does NOT position itself: a floating toast wraps it in a positioned element, so no position class is ever passed to its root (Trap 1). Props: tone (error/success/neutral), size (sm/md/lg — lg is the floating-toast weight and adds a shadow), className, children.',
+    Component: NoticePreview,
   },
   {
     name: 'Badge',

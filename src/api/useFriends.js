@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../net/api'
-import { useSession } from '../state/session'
-import { getSocket } from '../net/socket'
-import { SERVER_EVENTS } from '../net/events'
+import * as friendService from '../services/friends'
+import { useSession } from '../stores/session'
+import { getSocket } from '../services/socket'
+import { SERVER_EVENTS } from '../services/events'
+import { queryKeys } from './keys'
 
 // Friends data. One query returns the whole picture — accepted friends plus
 // pending requests both ways — as { friends, incoming, outgoing }. Friends carry
@@ -14,11 +15,11 @@ export function useFriends() {
   const token = useSession((s) => s.token)
 
   return useQuery({
-    queryKey: ['friends'],
+    queryKey: queryKeys.friends,
     enabled: Boolean(token),
     staleTime: 15_000,
     refetchInterval: 30_000,
-    queryFn: () => apiFetch('/api/friends'),
+    queryFn: friendService.getFriends,
   })
 }
 
@@ -35,7 +36,7 @@ export function useFriendsRealtime() {
     if (!token) return
     const socket = getSocket()
     const onUpdate = (state) => {
-      queryClient.setQueryData(['friends'], state)
+      queryClient.setQueryData(queryKeys.friends, state)
       // Relations in any open search (Add/Requested/Confirm/Added) may have moved.
       queryClient.invalidateQueries({ queryKey: ['user-search'] })
     }
@@ -53,14 +54,11 @@ export function useUserSearch(query) {
   const q = query.trim()
 
   return useQuery({
-    queryKey: ['user-search', q],
+    queryKey: queryKeys.userSearch(q),
     enabled: Boolean(token) && q.length > 0,
     staleTime: 10_000,
     placeholderData: (prev) => prev,
-    queryFn: async () => {
-      const { results } = await apiFetch(`/api/users/search?q=${encodeURIComponent(q)}`)
-      return results
-    },
+    queryFn: () => friendService.searchUsers(q),
   })
 }
 
@@ -73,28 +71,28 @@ function useFriendMutation(mutationFn) {
   return useMutation({
     mutationFn,
     onSuccess: (state) => {
-      queryClient.setQueryData(['friends'], state)
+      queryClient.setQueryData(queryKeys.friends, state)
       queryClient.invalidateQueries({ queryKey: ['user-search'] })
     },
   })
 }
 
-// Send a friend request (or auto-accept if they already requested you).
+/** Send a friend request (or auto-accept if they already requested you). */
 export function useSendRequest() {
-  return useFriendMutation((userId) => apiFetch('/api/friends/requests', { method: 'POST', body: { userId } }))
+  return useFriendMutation(friendService.sendFriendRequest)
 }
 
-// Confirm an incoming request → you're friends.
+/** Confirm an incoming request → you're friends. */
 export function useAcceptRequest() {
-  return useFriendMutation((userId) => apiFetch(`/api/friends/requests/${userId}/accept`, { method: 'POST' }))
+  return useFriendMutation(friendService.acceptFriendRequest)
 }
 
-// Decline an incoming request OR cancel one you sent (same endpoint).
+/** Decline an incoming request OR cancel one you sent (same endpoint). */
 export function useRemovePending() {
-  return useFriendMutation((userId) => apiFetch(`/api/friends/requests/${userId}`, { method: 'DELETE' }))
+  return useFriendMutation(friendService.removePendingRequest)
 }
 
-// Remove an existing friend.
+/** Remove an existing friend. */
 export function useRemoveFriend() {
-  return useFriendMutation((friendId) => apiFetch(`/api/friends/${friendId}`, { method: 'DELETE' }))
+  return useFriendMutation(friendService.removeFriend)
 }

@@ -1,12 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 import LoginPage from '../components/LoginPage/LoginPage.jsx'
-import { useAuth } from '../query/auth'
+import { useAuth } from '../api/useAuth'
 
-// LoginContainer — wires the presentational LoginPage to the auth mutation +
+// LoginScreen — the /login route: wires the presentational LoginPage to the auth mutation +
 // session store. The page reports { mode, username, password }; the mutation hits
 // /auth/login or /auth/register and, on success, fills the session; we navigate
 // home. A failed request surfaces as a banner (AuthForm has no error slot).
-export default function LoginContainer() {
+export default function LoginScreen() {
   const navigate = useNavigate()
   const { mutateAsync, isPending, error, reset } = useAuth()
 

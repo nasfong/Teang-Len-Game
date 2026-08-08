@@ -5,17 +5,18 @@ import HomePage from '../components/HomePage/HomePage.jsx'
 import Modal from '../components/Modal/Modal.jsx'
 import Profile from '../components/Profile/Profile.jsx'
 import Shop from '../components/Shop/Shop.jsx'
-import FriendsModal from './FriendsModal.jsx'
+import FriendsModal from '../features/friends/FriendsModal.jsx'
 import SelectMode from '../components/SelectMode/SelectMode.jsx'
 import DailyBonus from '../components/DailyBonus/DailyBonus.jsx'
 import friendIcon from '../assets/icons/friend.webp'
 import profileIcon from '../assets/icons/profile.webp'
 import shopIcon from '../assets/icons/shop.webp'
-import { useSession, selectUser, selectCoin } from '../state/session'
-import { useWallet } from '../query/auth'
-import { useClaimAdReward } from '../query/rewards'
-import { useProducts } from '../query/shop'
-import { productToPack } from '../net/adapters'
+import { useSession, selectUser, selectCoin } from '../stores/session'
+import { useWallet } from '../api/useAuth'
+import { useClaimAdReward, useProducts } from '../api/useShop'
+import Notice from '../components/Notice/Notice.jsx'
+import { productToPack } from '../services/adapters'
+import { displayName as toDisplayName } from '../utils/user'
 
 // Content panels fade up on entry; the parent staggers them so SelectMode leads and
 // DailyBonus follows.
@@ -31,7 +32,7 @@ const panelIn = {
   show: { y: 0, opacity: 1, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } },
 }
 
-// HomeContainer — the landing screen wired to the real session.
+// HomeScreen — the / route: the landing screen wired to the real session.
 //
 // LIVE data: the Header username + coin come from the global session, and the
 // wallet is refetched fresh on mount (useWallet). The Profile modal shows the
@@ -41,7 +42,7 @@ const panelIn = {
 // PRESENTATIONAL for now: Shop, Friends and DailyBonus have no backend endpoints
 // yet, so they render with placeholder data — the shells are real, the wiring
 // lands when those services exist. The mode picker is local UI state.
-export default function HomeContainer() {
+export default function HomeScreen() {
   const navigate = useNavigate()
   const user = useSession(selectUser)
   const coin = useSession(selectCoin)
@@ -75,7 +76,7 @@ export default function HomeContainer() {
     }, 2000)
   }
 
-  const displayName = user?.displayName ?? user?.username ?? 'Player'
+  const displayName = toDisplayName(user)
 
   function logout() {
     signOut()
@@ -143,13 +144,9 @@ export default function HomeContainer() {
       {/* Shop (catalog API) + Friends (search/add/list API). */}
       <Modal open={openModal === 'shop'} onClose={() => { setOpenModal(null); setAdNote(null) }}>
         {adNote && (
-          <p
-            className={`mb-2 rounded-lg px-3 py-1.5 text-center font-display text-sm [--stroke-width:0] ${
-              adNote.ok ? 'bg-black/50 text-[#FFD27A]' : 'bg-red-600/90 text-white'
-            }`}
-          >
+          <Notice tone={adNote.ok ? 'success' : 'error'} className="mb-2">
             {adNote.text}
-          </p>
+          </Notice>
         )}
         <Shop
           bare

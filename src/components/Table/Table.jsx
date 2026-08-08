@@ -198,7 +198,7 @@ const SEAT_SIZES = {
  *  `size` picks a tier from SEAT_SIZES — 'sm' for opponents, 'md' for the local
  *  player. `turnSeconds`, when the seat is active, rings the avatar with a draining
  *  TurnTimer. */
-function PlayerSeat({ name = 'Player', coin, avatarSrc, host = false, active = false, afk = false, emote, size = 'md', turnSeconds, turnKey, onTurnExpire, rank = null, winner = false, coinDelta = null }) {
+function PlayerSeat({ name = 'Player', coin, avatarSrc, host = false, active = false, afk = false, bot = false, emote, size = 'md', turnSeconds, turnKey, onTurnExpire, rank = null, winner = false, coinDelta = null }) {
   const s = SEAT_SIZES[size] ?? SEAT_SIZES.md
   // On turn, the avatar wears the countdown ring instead of the idle scale-up:
   // the draining ring is the stronger "it's them" signal, and scaling would fight
@@ -214,7 +214,7 @@ function PlayerSeat({ name = 'Player', coin, avatarSrc, host = false, active = f
           boxing it. */}
       <div
         className={`relative drop-shadow-[0_4px_10px_rgba(0,0,0,0.55)] transition-transform duration-200 ${active && !ringed ? 'scale-105' : ''
-          } ${afk ? 'opacity-60 grayscale' : ''}`}
+          } ${afk && !bot ? 'opacity-60 grayscale' : ''}`}
       >
         {/* Winner halo — a pulsing gold ring hugging the avatar at match end. An
             absolute rounded sibling so its box-shadow spreads outside the avatar
@@ -245,11 +245,17 @@ function PlayerSeat({ name = 'Player', coin, avatarSrc, host = false, active = f
           </span>
         )}
         {/* AFK badge — a disconnected player whose turns a bot is covering. */}
-        {afk && (
+        {/* A bot seat (solo vs bots) shows a blue "Bot"; a disconnected human shows the
+            red "AFK". Bot wins when both are set — a bot is present and playing. */}
+        {bot ? (
+          <span className="absolute -bottom-1.5 left-1/2 z-10 -translate-x-1/2 rounded-full bg-[#2B7FC9] px-1.5 py-0.5 font-display text-[10px] leading-none text-white [--stroke-width:0] shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+            Bot
+          </span>
+        ) : afk ? (
           <span className="absolute -bottom-1.5 left-1/2 z-10 -translate-x-1/2 rounded-full bg-[#E0483C] px-1.5 py-0.5 font-display text-[10px] leading-none text-white [--stroke-width:0] shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
             AFK
           </span>
-        )}
+        ) : null}
         {/* The ring floats ON TOP of the avatar at full size, rather than shrinking
             it into the middle of a bigger box. key re-arms it each turn (a CSS
             animation only restarts on remount); onExpire drives auto-play/pass. */}

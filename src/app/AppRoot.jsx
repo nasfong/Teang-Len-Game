@@ -1,15 +1,15 @@
 import { useEffect } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router-dom'
-import { queryClient } from '../query/client'
+import { queryClient } from '../api/client'
 import { router } from './router.jsx'
 import GlobalErrorModal from './GlobalErrorModal.jsx'
 import RoomInviteToast from './RoomInviteToast.jsx'
 import LandscapeGate from './LandscapeGate.jsx'
-import { useSession } from '../state/session'
-import { connectSocket, disconnectSocket } from '../net/socket'
-import { useFriendsRealtime } from '../query/friends'
-import { useAutoGuest } from './useAutoGuest'
+import { useSession } from '../stores/session'
+import { connectSocket, disconnectSocket } from '../services/socket'
+import { useFriendsRealtime } from '../api/useFriends'
+import { useAutoGuest } from '../features/auth/useAutoGuest'
 
 // Keep the shared socket connected for the WHOLE time the user is logged in — not
 // just on the lobby/table screens that stream through it. Presence (who's online)

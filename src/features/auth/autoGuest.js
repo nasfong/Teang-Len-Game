@@ -1,6 +1,7 @@
-import { apiFetch, ApiError } from './api'
-import { API_URL } from './config'
-import { useSession } from '../state/session'
+import { ApiError } from '../../services/http'
+import { login, register } from '../../services/auth'
+import { API_URL } from '../../services/config'
+import { useSession } from '../../stores/session'
 
 // Auto-guest sign-in — TESTING ENVIRONMENTS ONLY.
 //
@@ -67,10 +68,6 @@ function clearStored() {
   }
 }
 
-function post(path, body) {
-  return apiFetch(path, { method: 'POST', auth: false, body })
-}
-
 /**
  * Sign in as the stored throw-away account, creating one if needed.
  * Resolves to the session ({ token, user, wallet }), or throws on failure.
@@ -81,7 +78,7 @@ async function obtainSession() {
   if (saved) {
     const { username, password } = saved
     try {
-      return await post('/api/auth/login', { username, password })
+      return await login({ username, password })
     } catch (err) {
       // A 401 means that server no longer knows this account (in-memory store
       // restarted, database reset). Anything else — network, 5xx — is a real
@@ -93,7 +90,7 @@ async function obtainSession() {
 
   const creds = generateCredentials()
   const { username, password } = creds
-  const session = await post('/api/auth/register', { username, password })
+  const session = await register({ username, password })
   writeStored(creds)
   return session
 }

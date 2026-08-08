@@ -17,9 +17,9 @@ scaffolding, not the shipping app. Two rules follow:
 
 ```
 src/
-  App.jsx                     workbench shell (gallery) — rarely edit
   index.css                   Tailwind import, self-hosted font, theme tokens,
                               font-display outline rule, keyframes
+  main.jsx                    tiny entry chunk → Preloader → AppRoot
   assets/fonts/               Lilita One woff2 subsets
   assets/icons/               art the APP owns
   components/
@@ -30,10 +30,36 @@ src/
     index.js                  registry: id → lazy import
     teanglen/                 engine.js, match.js, Board.jsx, index.js
     kanteal/                  + verify.mjs (rule checks), analyse.mjs (balance)
-  app/                        shell: routing, containers, screens
-  net/                        transport: socket, api, useRoomChannel
-  query/ state/               TanStack Query hooks, zustand stores
+  workbench/Workbench.jsx     the gallery shell (/component) — rarely edit
+  app/                        app shell: router, AppRoot, Preloader, global overlays
+  pages/                      ONE FILE PER ROUTE — <Name>Screen.jsx, composition only
+  features/                   feature logic too big/specific for a page: auth/,
+                              friends/, table/ (channels, TableLayout, hooks)
+  api/                        TanStack Query hooks (use<Domain>.js) + keys.js + client.js
+  services/                   transport + one function per endpoint (no React)
+  stores/                     zustand: session, appError, invites
+  hooks/ utils/               cross-feature helpers
 ```
+
+**The data path is one direction, always:**
+
+```
+pages/<Name>Screen.jsx  →  api/use<Domain>.js  →  services/<domain>.js  →  services/http.js
+   composition only        cache policy only      one fn per endpoint      fetch + envelope
+```
+
+- A **page** holds no `fetch`, no query key and no cache call. If it grows past
+  composing components + calling hooks, the logic belongs in `features/<name>/`.
+- **`api/`** owns keys, staleness and invalidation — nothing else. Every key comes
+  from [api/keys.js](src/api/keys.js); never write `['wallet']` at a call site.
+- **`services/`** is plain async functions, callable outside React (that's how the
+  cold-boot room recovery and the auto-guest sign-in reuse them).
+- **`stores/`** is for state that outlives a screen (session, global error, invites).
+  Server data belongs in `api/`, and UI state belongs in the component.
+
+`src/pages/<Name>Screen.jsx` is the ROUTE; `src/components/<Name>Page/` is a
+presentational layout the route renders. Different things, hence the different
+suffixes — don't collapse them.
 
 **Art ownership — ask who owns it, not where it's used:**
 - **Component's** → its folder (`AuthForm/icon_user.png`, `Table/table-background.png`).
@@ -58,6 +84,7 @@ src/
 | `HintBubble` | tooltip, 12 placements, absolute |
 | `EmoteBubble` | emoji over a profile, self-dismissing, absolute |
 | `TurnTimer` | countdown ring |
+| `Notice` | the one message pill. `tone` error/success/neutral, `size` sm/md/lg. Never positions itself — wrap it |
 
 **Composite** — imports siblings, so copying it out means bringing those folders too
 (the documented exception to the no-outside-imports rule).
@@ -234,6 +261,27 @@ the surface always applies.
 border/gradient/padding. Blocks meant for a Modal take `bare` (drops their Card, keeps their
 header): `<Modal><FriendList bare /></Modal>` (also `Profile`, `Shop`). CreateRoomForm and
 AuthForm lack it — render those on their own, or add it the same way.
+
+## Adding a screen — copy the table
+
+[pages/TableScreen.jsx](src/pages/TableScreen.jsx) is the reference implementation.
+It reads top-to-bottom as composition; everything it used to inline sits beside it:
+
+| | |
+| --- | --- |
+| [features/table/TableLayout.jsx](src/features/table/TableLayout.jsx) | screen chrome — backdrop, safe-area HUD corners, room/bet pill, board layer. Shared with [SoloTableScreen](src/pages/SoloTableScreen.jsx) |
+| [features/table/useAutoStart.js](src/features/table/useAutoStart.js) | the countdown + the host's deal |
+| [features/table/useLeaveTable.js](src/features/table/useLeaveTable.js) | the "leave after this hand" toggle |
+| [features/table/useRoomChannel.js](src/features/table/useRoomChannel.js) | the room's socket link |
+
+The rules that generalise:
+- **Slots, not props-for-everything.** `TableLayout` takes `hudLeft`/`hudRight` nodes.
+  The wrapper owns the positioning so a caller never passes a position class down
+  (Trap 1 — `Button`'s root is `relative`, and an `absolute` handed to it is dropped).
+- **A screen's cohesive lump becomes a hook in `features/`**, named for the behaviour
+  (`useLeaveTable`), not for the screen.
+- **Chrome shared by two screens becomes a `features/<name>/<Name>Layout.jsx`** — not a
+  `components/` entry, since it knows about safe areas and app data and isn't portable.
 
 ## Adding a component
 1. `src/components/<Name>/<Name>.jsx` (default export), assets in the folder.

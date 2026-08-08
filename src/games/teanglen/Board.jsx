@@ -3,7 +3,7 @@ import Table from '../../components/Table/Table.jsx'
 import Hand from '../../components/Hand/Hand.jsx'
 import TrickPile from '../../components/TrickPile/TrickPile.jsx'
 import Button from '../../components/Button/Button.jsx'
-import { classify, canBeat, label, suggestSelection, DEFAULT_FEATURES } from './engine.js'
+import { classify, canBeat, label, suggestSelection, chooseBotMovePro, DEFAULT_FEATURES } from './engine.js'
 import { applyPlay, applySkip, deriveFlags, mySeatIndex, lowestCard } from './match.js'
 
 // OnlineBoard — the networked table, ALWAYS on screen (lobby and gameplay are the
@@ -96,7 +96,7 @@ function useDelayedReveal(over) {
   return revealing
 }
 
-export default function OnlineBoard({ channel, room, waitingText, waitingAction = null }) {
+export default function OnlineBoard({ channel, room, waitingText, waitingAction = null, bots = false }) {
   const playerId = channel.playerId
   // Fall back to the room snapshot's persisted gameState so someone who arrives
   // mid-game (a spectator, or a player who took a seat mid-hand) sees the game in
@@ -177,9 +177,20 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
       const s = latest.current
       if (!s || s.phase !== 'playing' || s.currentPlayer !== turnSeat) return
       const actingId = s.seats[turnSeat].playerId
-      const res = s.current ? applySkip(s, turnSeat) : applyPlay(s, turnSeat, [lowestCard(s.hands[turnSeat])])
+      // `bots` (solo vs bots) → a real competitive move; otherwise this is AFK cover for
+      // a disconnected human, which stays PASSIVE (pass when following, lead the lowest).
+      let res, passed
+      if (bots) {
+        const opponentCounts = s.hands.map((h) => h.length).filter((len, i) => i !== turnSeat && len > 0)
+        const cards = chooseBotMovePro(s.hands[turnSeat], s.current, { opponentCounts })
+        passed = !cards // chooseBotMovePro only returns null while following (a real pass)
+        res = cards ? applyPlay(s, turnSeat, cards) : applySkip(s, turnSeat)
+      } else {
+        passed = Boolean(s.current)
+        res = passed ? applySkip(s, turnSeat) : applyPlay(s, turnSeat, [lowestCard(s.hands[turnSeat])])
+      }
       if (!res.state) return
-      if (s.current) channel.skipAs(actingId, res.state)
+      if (passed) channel.skipAs(actingId, res.state)
       else channel.playAs(actingId, res.state, deriveFlags(res.state, turnSeat))
     }, 1400)
     return () => clearTimeout(t)
@@ -219,6 +230,7 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
       name: s.name,
       host: false,
       afk: info?.isOnline === false,
+      bot: info?.isBot === true,
       coin,
       rank: place > 0 ? place : null,
       winner: place === 1,
@@ -330,7 +342,7 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
       <div className="relative flex min-h-0 w-full flex-1 justify-center">
         {/* Anchored top-LEFT, and BELOW the HUD row. Three things compete for the
             top of the felt: the top seat's avatar (centred), the Leave button
-            (top-left) and the room pill (top-right) — see TableContainer's HUD. So
+            (top-left) and the room pill (top-right) — see features/table/TableLayout. So
             the pill is the only one that can give way: top-14 clears Leave, and
             max-w-42% stops it reaching the centred top seat (46% did, once the text
             was long enough — measured, not eyeballed).

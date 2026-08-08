@@ -1,4 +1,4 @@
-import Modal from '../components/Modal/Modal.jsx'
+import Modal from '../../components/Modal/Modal.jsx'
 import FriendsPanel from './FriendsPanel.jsx'
 
 // The one friends popup, reusable anywhere. Shows the full friends experience —

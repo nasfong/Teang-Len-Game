@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer } from 'react'
-import { connectSocket } from '../net/socket'
-import { CLIENT_EVENTS, SERVER_EVENTS } from '../net/events'
-import { useSession } from '../state/session'
+import { connectSocket } from '../../services/socket'
+import { CLIENT_EVENTS, SERVER_EVENTS } from '../../services/events'
+import { useSession } from '../../stores/session'
 
 // useRoomChannel — the live socket link for ONE room (the table screen).
 //

@@ -318,7 +318,7 @@ export default function GameTable({ bare = false, fill = false, className = '' }
             table. Purely presentational, so it never eats a tap (pointer-events). */}
         {/* Anchored top-LEFT, and BELOW the HUD row. Three things compete for the
             top of the felt: the top seat's avatar (centred), the Leave button
-            (top-left) and the room pill (top-right) — see TableContainer's HUD. So
+            (top-left) and the room pill (top-right) — see features/table/TableLayout. So
             the pill is the only one that can give way: top-14 clears Leave, and
             max-w-42% stops it reaching the centred top seat (46% did, once the text
             was long enough — measured, not eyeballed).

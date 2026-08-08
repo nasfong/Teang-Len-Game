@@ -6,11 +6,13 @@ import CreateRoomForm from '../components/CreateRoomForm/CreateRoomForm.jsx'
 import homeBackground from '../components/HomePage/background.webp'
 import cardsIcon from '../components/CreateRoomForm/card.webp'
 import keysIcon from '../components/CreateRoomForm/keys.webp'
-import { useSession, selectUser, selectCoin } from '../state/session'
-import { useWallet } from '../query/auth'
-import { useRooms, useCreateRoom, useJoinRoom } from '../query/rooms'
+import { useSession, selectUser, selectCoin } from '../stores/session'
+import { useWallet } from '../api/useAuth'
+import { useRooms, useCreateRoom, useJoinRoom } from '../api/useRooms'
 import { catalogue } from '../games/index.js'
-import { writeSolo } from '../net/soloGame.js'
+import { writeSolo } from '../features/table/soloGame.js'
+import Notice from '../components/Notice/Notice.jsx'
+import { displayName as toDisplayName } from '../utils/user'
 
 // Names for the bot seats in a solo game (seat 0 is the human).
 const BOT_NAMES = ['Sophea', 'Dara', 'Rith', 'Chan', 'Mony', 'Vichea', 'Bopha']
@@ -26,13 +28,13 @@ const CREATE_ROOM_HEADING = (
   </span>
 )
 
-// RoomContainer — the lobby wired to the backend.
+// LobbyScreen — the /room route: the lobby wired to the backend.
 //
 // The room list is a polling query (mapped to RoomCard props via the adapter);
 // Create and Join are mutations that charge the wallet server-side and refetch the
 // lobby. Both land you in the room's table — that route arrives in the Table slice;
 // until then navigating there falls back home.
-export default function RoomContainer() {
+export default function LobbyScreen() {
   const navigate = useNavigate()
   const user = useSession(selectUser)
   const coin = useSession(selectCoin)
@@ -46,7 +48,7 @@ export default function RoomContainer() {
 
   const [creating, setCreating] = useState(false)
 
-  const displayName = user?.displayName ?? user?.username ?? 'Player'
+  const displayName = toDisplayName(user)
   // The card whose Join is in flight — locks just that button.
   const joiningId = joinRoom.isPending ? joinRoom.variables : null
   const actionError = joinRoom.error ?? createRoom.error
@@ -59,7 +61,7 @@ export default function RoomContainer() {
 
   function submitCreate(values) {
     // Play with Bots → a client-only game against bots, no server room and no other
-    // players (see SoloTableContainer / useSoloChannel). Stash the setup in localStorage
+    // players (see SoloTableScreen / useSoloChannel). Stash the setup in localStorage
     // and jump to /solo; the human takes seat 0 and bots fill the rest.
     if (values.withBots) {
       const seats = [{ playerId: user?.id, name: displayName }]
@@ -117,17 +119,13 @@ export default function RoomContainer() {
       {/* A join failure (room filled/started, or funds) shown over the lobby. */}
       {joinRoom.isError && (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-          <div className="rounded-xl bg-red-600/95 px-4 py-2 font-display text-sm text-white shadow-lg [--stroke-width:0]">
-            {actionError?.message ?? 'Could not join the room.'}
-          </div>
+          <Notice size="lg">{actionError?.message ?? 'Could not join the room.'}</Notice>
         </div>
       )}
 
       <Modal open={creating} deco onClose={() => setCreating(false)} heading={CREATE_ROOM_HEADING}>
         {createRoom.isError && (
-          <p className="mb-3 rounded-lg bg-red-600/90 px-3 py-2 text-center font-display text-sm text-white [--stroke-width:0]">
-            {createRoom.error?.message ?? 'Could not create the room.'}
-          </p>
+          <Notice className="mb-3">{createRoom.error?.message ?? 'Could not create the room.'}</Notice>
         )}
         <CreateRoomForm
           balance={coin}

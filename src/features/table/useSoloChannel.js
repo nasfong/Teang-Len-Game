@@ -74,6 +74,8 @@ export function useSoloChannel({ playerId, config, initialGame = null }) {
       // The human is the only ONLINE seat; bots are offline, which is what makes the
       // Board drive them (see KantealBoard's bot driver).
       isOnline: s.playerId === playerId,
+      // …and every non-human seat is a bot, so the Table badges it "Bot" not "AFK".
+      isBot: s.playerId !== playerId,
       coin: s.playerId === playerId ? config.humanCoin : (s.coin ?? (config.betCoin ?? 0) * 20),
     }))
     return {

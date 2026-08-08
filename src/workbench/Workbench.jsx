@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { components } from './components/registry.jsx'
+import { components } from '../components/registry.jsx'
 
 const BACKDROPS = {
   dark: 'bg-[#14121f]',

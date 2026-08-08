@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { apiFetch } from '../net/api'
-import { useSession, selectIsAuthed } from '../state/session'
+import { getActiveRoom } from '../services/rooms'
+import { useSession, selectIsAuthed } from '../stores/session'
 
 // Cold-boot recovery — "am I still in a live room?"
 //
@@ -14,7 +14,7 @@ import { useSession, selectIsAuthed } from '../state/session'
 //
 // This runs ONCE per app launch (a module-level latch, not per-render), so ordinary
 // navigation — tapping Home, leaving a table on purpose — never yanks the player
-// back. A refresh ON the table URL is already handled by TableContainer, so we skip
+// back. A refresh ON the table URL is already handled by TableScreen, so we skip
 // when we're on that room's route.
 let recovered = false
 
@@ -36,11 +36,11 @@ export function useActiveRoomRecovery() {
     recovered = true
     let cancelled = false
 
-    apiFetch('/api/rooms/active')
-      .then(({ room }) => {
+    getActiveRoom()
+      .then((room) => {
         if (cancelled || !room) return
         const target = `/table/${room.roomId}`
-        // Already there (refresh on the table URL) — TableContainer owns it.
+        // Already there (refresh on the table URL) — TableScreen owns it.
         if (location.pathname === target) return
         navigate(target, { replace: true })
       })

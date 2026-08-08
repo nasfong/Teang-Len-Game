@@ -1,12 +1,15 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../net/api'
-import { roomSnapshotToCard } from '../net/adapters'
-import { connectSocket } from '../net/socket'
-import { CLIENT_EVENTS, SERVER_EVENTS } from '../net/events'
-import { useSession } from '../state/session'
+import * as roomService from '../services/rooms'
+import { roomSnapshotToCard } from '../services/adapters'
+import { connectSocket } from '../services/socket'
+import { CLIENT_EVENTS, SERVER_EVENTS } from '../services/events'
+import { useSession } from '../stores/session'
+import { queryKeys } from './keys'
 
-// Room server-state, via TanStack Query.
+// Room server-state, via TanStack Query. The REQUESTS live in services/rooms.js;
+// this file owns only cache policy — keys, freshness, invalidation, and the socket
+// stream that keeps the lobby live.
 //
 // The lobby is driven by a WEBSOCKET stream: on mount we subscribe to the server's
 // lobby room and write each `lobby:update` straight into the query cache, so the
@@ -19,14 +22,11 @@ export function useRooms() {
   const qc = useQueryClient()
 
   const query = useQuery({
-    queryKey: ['rooms'],
+    queryKey: queryKeys.rooms,
     enabled: Boolean(token),
     // Fallback only — the socket is the primary freshness source below.
     refetchInterval: 30_000,
-    queryFn: async () => {
-      const { rooms } = await apiFetch('/api/rooms')
-      return rooms.map(roomSnapshotToCard)
-    },
+    queryFn: async () => (await roomService.listRooms()).map(roomSnapshotToCard),
   })
 
   // Live lobby: subscribe while this screen is mounted; each push replaces the
@@ -35,7 +35,7 @@ export function useRooms() {
   useEffect(() => {
     if (!token) return
     const socket = connectSocket()
-    const onLobby = ({ rooms }) => qc.setQueryData(['rooms'], rooms.map(roomSnapshotToCard))
+    const onLobby = ({ rooms }) => qc.setQueryData(queryKeys.rooms, rooms.map(roomSnapshotToCard))
 
     socket.on(SERVER_EVENTS.LOBBY_UPDATE, onLobby)
     const subscribe = () => socket.emit(CLIENT_EVENTS.LOBBY_SUBSCRIBE)
@@ -59,40 +59,33 @@ export function useRoom(roomId) {
   const token = useSession((s) => s.token)
 
   return useQuery({
-    queryKey: ['room', roomId],
+    queryKey: queryKeys.room(roomId),
     enabled: Boolean(token && roomId),
-    queryFn: async () => {
-      const { room } = await apiFetch(`/api/rooms/${roomId}`)
-      return room
+    queryFn: () => roomService.getRoom(roomId),
+  })
+}
+
+// Shared by create and join: both charge the wallet server-side, so both mirror the
+// returned balance into the session and refetch the lobby.
+function useRoomMutation(mutationFn) {
+  const qc = useQueryClient()
+  const setWallet = useSession((s) => s.setWallet)
+
+  return useMutation({
+    mutationFn,
+    onSuccess: ({ wallet }) => {
+      if (wallet) setWallet(wallet)
+      qc.invalidateQueries({ queryKey: queryKeys.rooms })
     },
   })
 }
 
 export function useCreateRoom() {
-  const qc = useQueryClient()
-  const setWallet = useSession((s) => s.setWallet)
-
-  return useMutation({
-    // { name, gameId, betCoin, maxPlayers } — see createRoomSchema.
-    mutationFn: (payload) => apiFetch('/api/rooms', { method: 'POST', body: payload }),
-    onSuccess: ({ wallet }) => {
-      if (wallet) setWallet(wallet)
-      qc.invalidateQueries({ queryKey: ['rooms'] })
-    },
-  })
+  return useRoomMutation(roomService.createRoom)
 }
 
 export function useJoinRoom() {
-  const qc = useQueryClient()
-  const setWallet = useSession((s) => s.setWallet)
-
-  return useMutation({
-    mutationFn: (roomId) => apiFetch(`/api/rooms/${roomId}/join`, { method: 'POST' }),
-    onSuccess: ({ wallet }) => {
-      if (wallet) setWallet(wallet)
-      qc.invalidateQueries({ queryKey: ['rooms'] })
-    },
-  })
+  return useRoomMutation(roomService.joinRoom)
 }
 
 // Invite a friend into a room you're in. Fire-and-forget from the caller's side —
@@ -100,6 +93,6 @@ export function useJoinRoom() {
 // `variables` is the friendId, so the panel can flag which row is in flight.
 export function useInviteToRoom(roomId) {
   return useMutation({
-    mutationFn: (userId) => apiFetch(`/api/rooms/${roomId}/invite`, { method: 'POST', body: { userId } }),
+    mutationFn: (userId) => roomService.inviteToRoom(roomId, userId),
   })
 }
