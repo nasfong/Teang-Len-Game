@@ -31,8 +31,12 @@
 
 /**
  * @typedef {object} GameMeta
- * @property {string}  id          stable slug, e.g. 'teanglen'. Persisted on the room
- *                                 and mirrored in the backend catalog — never rename.
+ * @property {string}  code        stable slug, e.g. 'teanglen'. This is the game's
+ *                                 unique NAME on the wire: it's persisted on the room
+ *                                 (RoomSnapshot.gameCode), keys the loader registry in
+ *                                 games/index.js, and is mirrored in the backend catalog
+ *                                 (backend/src/config/games.ts). Changing one means
+ *                                 changing all three — treat it as a public identifier.
  * @property {string}  name        display name for the lobby
  * @property {number}  minPlayers
  * @property {number}  maxPlayers

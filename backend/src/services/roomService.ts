@@ -35,13 +35,13 @@ function reassignHostIfNeeded(room: Room): void {
 export function create(
   hostPlayerId: string,
   hostName: string,
-  input: { name: string; gameId?: string; betCoin: number; maxPlayers: number },
+  input: { name: string; gameCode?: string; betCoin: number; maxPlayers: number },
 ): ServiceResult<Room> {
   const room = createRoom({
     hostPlayerId,
     hostName,
     name: input.name,
-    gameId: input.gameId,
+    gameCode: input.gameCode,
     betCoin: input.betCoin,
     maxPlayers: input.maxPlayers,
   })

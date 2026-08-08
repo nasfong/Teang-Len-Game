@@ -20,7 +20,7 @@ export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'finished'
 export interface Room {
   roomId: string
   name: string
-  gameId: string // which card game (see config/games.ts) — the server never reads its rules
+  gameCode: string // which card game (see config/games.ts) — the server never reads its rules
   hostPlayerId: string
   betCoin: number // stake per seat (0 = free table)
   players: Player[]
@@ -50,7 +50,7 @@ export interface PlayerSnapshot {
 export interface RoomSnapshot {
   roomId: string
   name: string
-  gameId: string // the client loads this game's module to render the room
+  gameCode: string // the client loads this game's module to render the room
   hostPlayerId: string
   betCoin: number
   players: PlayerSnapshot[]

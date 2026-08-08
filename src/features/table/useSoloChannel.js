@@ -81,7 +81,7 @@ export function useSoloChannel({ playerId, config, initialGame = null }) {
     return {
       roomId: config.roomId,
       name: config.name,
-      gameId: config.gameId,
+      gameCode: config.gameCode,
       betCoin: config.betCoin,
       maxPlayers: config.maxPlayers,
       status: game ? 'playing' : 'waiting',

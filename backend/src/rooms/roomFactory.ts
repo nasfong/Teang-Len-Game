@@ -21,7 +21,7 @@ export function createParticipant(input: { playerId: string; name: string; socke
 
 export function createRoom(input: {
   name: string
-  gameId?: string
+  gameCode?: string
   hostPlayerId: string
   hostName: string
   betCoin: number
@@ -30,12 +30,12 @@ export function createRoom(input: {
   const now = Date.now()
   // The catalog is the authority on seat count, turn length and rule variation —
   // the request only chooses WHICH game, never its limits.
-  const game = getGame(input.gameId)
+  const game = getGame(input.gameCode)
   const host = createParticipant({ playerId: input.hostPlayerId, name: input.hostName, seatIndex: 0 })
   return {
     roomId: randomUUID(),
     name: input.name,
-    gameId: game.id,
+    gameCode: game.code,
     hostPlayerId: input.hostPlayerId,
     betCoin: input.betCoin,
     players: [host],
@@ -76,7 +76,7 @@ export function toRoomSnapshot(room: Room): RoomSnapshot {
   return {
     roomId: room.roomId,
     name: room.name,
-    gameId: room.gameId,
+    gameCode: room.gameCode,
     hostPlayerId: room.hostPlayerId,
     betCoin: room.betCoin,
     players: room.players.map(toPlayerSnapshot),

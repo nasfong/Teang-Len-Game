@@ -32,7 +32,7 @@ export function roomSnapshotToCard(room) {
     name: room.name,
     // Resolved to a display name here rather than in RoomCard: the card is a
     // portable component and must not know the game catalogue exists.
-    game: catalogue.find((g) => g.id === room.gameId)?.name ?? null,
+    game: catalogue.find((g) => g.code === room.gameCode)?.name ?? null,
     betCoin: room.betCoin,
     maxPlayers: room.maxPlayers,
     status: room.status, // 'waiting' | 'playing' — the card shows a live badge + Join/Watch

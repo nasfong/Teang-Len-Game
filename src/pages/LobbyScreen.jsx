@@ -73,7 +73,7 @@ export default function LobbyScreen() {
         config: {
           roomId: 'solo',
           name: values.roomName,
-          gameId: values.gameId,
+          gameCode: values.gameCode,
           betCoin: values.betAmount,
           maxPlayers: values.maxPlayers,
           seats,
@@ -86,7 +86,7 @@ export default function LobbyScreen() {
       return
     }
     createRoom.mutate(
-      { name: values.roomName, gameId: values.gameId, betCoin: values.betAmount, maxPlayers: values.maxPlayers },
+      { name: values.roomName, gameCode: values.gameCode, betCoin: values.betAmount, maxPlayers: values.maxPlayers },
       {
         onSuccess: ({ room }) => {
           setCreating(false)

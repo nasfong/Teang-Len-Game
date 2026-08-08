@@ -8,7 +8,7 @@ import { useAutoStart, AUTO_START_SECONDS } from '../features/table/useAutoStart
 import { useLeaveTable } from '../features/table/useLeaveTable'
 import { useRoomChannel } from '../features/table/useRoomChannel'
 import { useGame } from '../games/useGame.js'
-import { DEFAULT_GAME_ID } from '../games/index.js'
+import { DEFAULT_GAME_CODE } from '../games/index.js'
 import { useRoom } from '../api/useRooms'
 import { queryKeys } from '../api/keys'
 
@@ -32,9 +32,9 @@ export default function TableScreen() {
   const room = channel.room ?? initialRoom
 
   // Which card game this room is playing. The module arrives in its own chunk, so
-  // it's null for the first beat — see the loading branch below. Rooms created
-  // before gameId existed have none, and fall back to the original game.
-  const game = useGame(room?.gameId ?? DEFAULT_GAME_ID)
+  // it's null for the first beat — see the loading branch below. The `??` is what
+  // stops a room with no gameCode from parking on "Loading table…" forever.
+  const game = useGame(room?.gameCode ?? DEFAULT_GAME_CODE)
 
   const { countdown, startNow, isHost, waiting, hasEnoughPlayers } = useAutoStart({ channel, room, game })
   const { leaving, isSpectator, toggleLeave } = useLeaveTable({ channel, room })
@@ -71,7 +71,7 @@ export default function TableScreen() {
 
   return (
     <TableLayout
-      gameId={room.gameId}
+      gameCode={room.gameCode}
       betCoin={room.betCoin}
       hudLeft={
         <>

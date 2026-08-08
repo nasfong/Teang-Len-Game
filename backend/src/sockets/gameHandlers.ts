@@ -125,7 +125,7 @@ function settlePot(roomId: string, rankings: Ranking[]): Settlement[] {
     settlements.push({ playerId, delta: rounded })
   }
 
-  if (getGame(room.gameId).payout === 'winner-take-all') {
+  if (getGame(room.gameCode).payout === 'winner-take-all') {
     // §4 — one winner (rank 1) sweeps one bet from every other participant. Zero-sum
     // and seat-count-agnostic (Kanteal seats 2–8), and each loser drops exactly one
     // bet, the worst case the join-time affordability check already guaranteed. Split

@@ -7,7 +7,7 @@
 // 500 kB warning, and six eagerly-imported games (each with an engine, a bot and a
 // board) would land on the one device this game is actually played on.
 //
-// `catalogue` is the cheap part — id/name/seat-counts for the lobby — and is
+// `catalogue` is the cheap part — code/name/seat-counts for the lobby — and is
 // deliberately kept OUT of the lazy chunks, so listing the games doesn't download
 // them. Keep it in step with each module's own `meta` (and with the backend catalog
 // at backend/src/config/games.ts, which is the authority for anything a client
@@ -19,21 +19,21 @@ const LOADERS = {
 }
 
 export const catalogue = [
-  { id: 'teanglen', name: 'Teang Len(ទៀងលេន)', minPlayers: 2, maxPlayers: 4 },
-  { id: 'kanteal', name: 'Kanteal(កន្ទេល)', minPlayers: 2, maxPlayers: 8 },
+  { code: 'teanglen', name: 'Teang Len(ទៀងលេន)', minPlayers: 2, maxPlayers: 4 },
+  { code: 'kanteal', name: 'Kanteal(កន្ទេល)', minPlayers: 2, maxPlayers: 8 },
 ]
 
-export const DEFAULT_GAME_ID = 'teanglen'
+export const DEFAULT_GAME_CODE = 'teanglen'
 
-export const isGameId = (id) => Object.hasOwn(LOADERS, id)
+export const isGameCode = (code) => Object.hasOwn(LOADERS, code)
 
 /**
- * Load one game module. Unknown ids fall back to the default rather than throwing —
+ * Load one game module. Unknown codes fall back to the default rather than throwing —
  * a room row carrying a game this build doesn't ship (an older client, a game pulled
  * from the catalog) should still open, not white-screen the table.
  * @returns {Promise<import('./contract.js').GameModule>}
  */
-export async function loadGame(id) {
-  const load = LOADERS[id] ?? LOADERS[DEFAULT_GAME_ID]
+export async function loadGame(code) {
+  const load = LOADERS[code] ?? LOADERS[DEFAULT_GAME_CODE]
   return (await load()).default
 }

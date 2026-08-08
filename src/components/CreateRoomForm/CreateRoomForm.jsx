@@ -31,7 +31,7 @@ const schema = yup.object({
   roomName: yup.string().trim().required('Name your room').max(24, 'Keep it under 24 characters'),
   betAmount: yup.number().required().integer().min(1000),
   maxPlayers: yup.number().oneOf(PLAYER_OPTIONS).required(),
-  gameId: yup.string(),
+  gameCode: yup.string(),
   // When on, the remaining seats are filled with auto-playing bots (like the Kanteal
   // demo) so the room can start and play through without waiting for real opponents.
   withBots: yup.boolean(),
@@ -63,15 +63,15 @@ export default function CreateRoomForm({
   } = useForm({
     mode: 'onTouched',
     resolver: yupResolver(schema),
-    defaultValues: { roomName: defaultName, betAmount: 1000, maxPlayers: 4, gameId: games[0]?.id, withBots: false },
+    defaultValues: { roomName: defaultName, betAmount: 1000, maxPlayers: 4, gameCode: games[0]?.code, withBots: false },
   })
 
   const betAmount = watch('betAmount')
   const maxPlayers = watch('maxPlayers')
-  const gameId = watch('gameId')
+  const gameCode = watch('gameCode')
   const withBots = watch('withBots')
 
-  const game = games.find((g) => g.id === gameId)
+  const game = games.find((g) => g.code === gameCode)
   // Seat counts are per game, so the toggles offer only what the chosen game
   // supports. The BACKEND catalog is the authority and clamps this anyway — this
   // just avoids showing a choice that would be silently corrected.
@@ -85,9 +85,9 @@ export default function CreateRoomForm({
   // Switching game can strand maxPlayers outside the new game's range (4 players
   // picked, then a 2-player game chosen). Pull it back to the nearest legal seat
   // count as part of the switch, so the form can never submit an impossible pair.
-  function pickGame(id) {
-    setValue('gameId', id, { shouldDirty: true })
-    const next = games.find((g) => g.id === id)
+  function pickGame(code) {
+    setValue('gameCode', code, { shouldDirty: true })
+    const next = games.find((g) => g.code === code)
     if (!next) return
     const clamped = Math.min(Math.max(maxPlayers, next.minPlayers ?? 2), next.maxPlayers ?? 4)
     if (clamped !== maxPlayers) setValue('maxPlayers', clamped, { shouldDirty: true })
@@ -95,7 +95,7 @@ export default function CreateRoomForm({
 
   const submit = handleSubmit((v) => {
     if (unaffordable) return
-    onSubmit?.({ roomName: v.roomName.trim(), betAmount: v.betAmount, maxPlayers: v.maxPlayers, gameId: v.gameId, withBots: v.withBots })
+    onSubmit?.({ roomName: v.roomName.trim(), betAmount: v.betAmount, maxPlayers: v.maxPlayers, gameCode: v.gameCode, withBots: v.withBots })
   })
 
   return (
@@ -135,7 +135,7 @@ export default function CreateRoomForm({
           <span className={`text-lg text-white text-nowrap ${OUTLINE}`}>Game</span>
           <div className="flex flex-wrap gap-2">
             {games.map((g) => (
-              <SquareToggle key={g.id} active={gameId === g.id} onClick={() => pickGame(g.id)} className="px-3 text-sm">
+              <SquareToggle key={g.code} active={gameCode === g.code} onClick={() => pickGame(g.code)} className="px-3 text-sm">
                 {g.name}
               </SquareToggle>
             ))}

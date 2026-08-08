@@ -352,8 +352,8 @@ const CreateRoomFormPreview = () => {
       <CreateRoomForm
         balance={12000}
         games={[
-          { id: 'teanglen', name: 'Teang Len', minPlayers: 2, maxPlayers: 4 },
-          { id: 'kanteal', name: 'Kanteal', minPlayers: 2, maxPlayers: 4 },
+          { code: 'teanglen', name: 'Teang Len', minPlayers: 2, maxPlayers: 4 },
+          { code: 'kanteal', name: 'Kanteal', minPlayers: 2, maxPlayers: 4 },
         ]}
         onCancel={() => { }}
         onSubmit={(values) => console.log('create room', values)}

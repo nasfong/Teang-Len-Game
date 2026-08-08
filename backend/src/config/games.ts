@@ -33,7 +33,7 @@ import { defaultRules, type GameRules } from './rules'
 export type PayoutModel = 'placement' | 'winner-take-all'
 
 export interface GameDefinition {
-  id: string
+  code: string
   name: string
   minPlayers: number
   maxPlayers: number
@@ -44,7 +44,7 @@ export interface GameDefinition {
 
 export const games: Record<string, GameDefinition> = {
   teanglen: {
-    id: 'teanglen',
+    code: 'teanglen',
     name: 'Teang Len',
     minPlayers: 2,
     maxPlayers: 4,
@@ -53,7 +53,7 @@ export const games: Record<string, GameDefinition> = {
     rules: defaultRules,
   },
   kanteal: {
-    id: 'kanteal',
+    code: 'kanteal',
     name: 'Kanteal',
     minPlayers: 2,
     maxPlayers: 8,
@@ -67,15 +67,15 @@ export const games: Record<string, GameDefinition> = {
   },
 }
 
-export const DEFAULT_GAME_ID = 'teanglen'
+export const DEFAULT_GAME_CODE = 'teanglen'
 
-export const gameIds = Object.keys(games)
+export const gameCodes = Object.keys(games)
 
 /**
- * Look up a game, falling back to the default. Rooms created before `gameId`
- * existed carry none, and an unknown id must not be able to strand a room with no
- * seat limits — so this never returns undefined.
+ * Look up a game, falling back to the default. An unknown code must not be able to
+ * strand a room with no seat limits, so this never returns undefined — seat counts
+ * and the turn timer are enforced from whatever it returns.
  */
-export function getGame(id: string | undefined | null): GameDefinition {
-  return (id && games[id]) || games[DEFAULT_GAME_ID]
+export function getGame(code: string | undefined | null): GameDefinition {
+  return (code && games[code]) || games[DEFAULT_GAME_CODE]
 }

@@ -53,10 +53,10 @@ const nextWhere = (state, from, ok) => {
 const nextActive = (state, from) => nextWhere(state, from, (q) => !state.finished[q])
 const nextToAct = (state, from) => nextWhere(state, from, (q) => !state.finished[q] && !state.skipped[q])
 
-function init(gameId = 0) {
+function init(dealId = 0) {
   const { hands, dealt, starter } = deal(SEATS.length)
   return {
-    gameId, // bumped each deal — the hand's face-down→face-up reveal keys on it
+    dealId, // bumped each deal — the hand's face-down→face-up reveal keys on it
     dealtHand: dealt[HUMAN], // your cards in the order they fell — shown before the sort flip
     seats: SEATS,
     hands,
@@ -204,7 +204,7 @@ function reducer(state, action) {
       return { ...state, ranked, phase: 'over', message: `🏆 ${state.seats[ranked[0]].name} wins!`, turnKey: state.turnKey + 1 }
     }
     case 'reset':
-      return init(state.gameId + 1)
+      return init(state.dealId + 1)
     default:
       return state
   }
@@ -221,7 +221,7 @@ export default function GameTable({ bare = false, fill = false, className = '' }
   const [state, dispatch] = useReducer(reducer, undefined, init)
   const { seats, hands, current, currentPlayer, phase, selected } = state
 
-  // Deal reveal, in five beats keyed on gameId:
+  // Deal reveal, in five beats keyed on dealId:
   //   'down'    face-down, cards in DEALT order
   //   'up'      flip up — you see the hand exactly as it fell, unsorted
   //   'flipdown' flip back down, still in dealt order
@@ -232,12 +232,12 @@ export default function GameTable({ bare = false, fill = false, className = '' }
   // two clean flips, never the cards sliding around face-up.
   //
   // The first beat is set by ADJUSTING STATE DURING RENDER (not an effect): a new
-  // gameId remounts the cards with fresh ids, and they must paint face-down on
+  // dealId remounts the cards with fresh ids, and they must paint face-down on
   // that very first frame or they'd flash their faces before the flip.
   const [reveal, setReveal] = useState('down')
-  const [dealtGame, setDealtGame] = useState(state.gameId)
-  if (dealtGame !== state.gameId) {
-    setDealtGame(state.gameId)
+  const [dealtGame, setDealtGame] = useState(state.dealId)
+  if (dealtGame !== state.dealId) {
+    setDealtGame(state.dealId)
     setReveal('down')
   }
   useEffect(() => {
@@ -248,7 +248,7 @@ export default function GameTable({ bare = false, fill = false, className = '' }
       setTimeout(() => setReveal('sorted'), 1860), // flip up: sorted
     ]
     return () => timers.forEach(clearTimeout)
-  }, [state.gameId])
+  }, [state.dealId])
 
   const isHumanTurn = phase === 'playing' && currentPlayer === HUMAN
   const humanHand = hands[HUMAN]

@@ -14,7 +14,7 @@ import { chooseBotMove, MAX_PLAYERS, MIN_PLAYERS } from './engine.js'
 /** @type {import('../contract.js').GameModule} */
 export default {
   meta: {
-    id: 'kanteal',
+    code: 'kanteal',
     name: 'Kanteal',
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,

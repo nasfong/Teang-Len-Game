@@ -22,7 +22,7 @@ export async function getActiveRoom() {
   return room ?? null
 }
 
-/** @param payload {{ name, gameId, betCoin, maxPlayers }} — see the backend's createRoomSchema. */
+/** @param payload {{ name, gameCode, betCoin, maxPlayers }} — see the backend's createRoomSchema. */
 export function createRoom(payload) {
   return apiFetch('/api/rooms', { method: 'POST', body: payload })
 }

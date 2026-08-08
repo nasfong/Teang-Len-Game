@@ -45,9 +45,9 @@ export function getRoomHandler(req: Request, res: Response): void {
 
 export function createRoomHandler(req: Request, res: Response): void {
   const userId = req.userId as string
-  const { name, gameId, betCoin, maxPlayers } = req.body as {
+  const { name, gameCode, betCoin, maxPlayers } = req.body as {
     name: string
-    gameId: string
+    gameCode: string
     betCoin: number
     maxPlayers: number
   }
@@ -64,7 +64,7 @@ export function createRoomHandler(req: Request, res: Response): void {
     return
   }
 
-  const result = roomService.create(userId, user.displayName, { name, gameId, betCoin, maxPlayers })
+  const result = roomService.create(userId, user.displayName, { name, gameCode, betCoin, maxPlayers })
   if (!result.ok) {
     sendFail(res, result.error, result.code)
     return

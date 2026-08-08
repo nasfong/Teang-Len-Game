@@ -13,7 +13,7 @@ import { chooseBotMove } from './engine.js'
 /** @type {import('../contract.js').GameModule} */
 export default {
   meta: {
-    id: 'teanglen',
+    code: 'teanglen',
     name: 'Teang Len',
     minPlayers: 2,
     maxPlayers: 4,

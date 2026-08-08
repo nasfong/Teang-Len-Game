@@ -5,7 +5,7 @@ import TableLayout, { TableLoading } from '../features/table/TableLayout.jsx'
 import { useSoloChannel } from '../features/table/useSoloChannel.js'
 import { readSolo, clearSolo } from '../features/table/soloGame.js'
 import { useGame } from '../games/useGame.js'
-import { DEFAULT_GAME_ID } from '../games/index.js'
+import { DEFAULT_GAME_CODE } from '../games/index.js'
 import { useSession, selectUser } from '../stores/session'
 
 // SoloTableScreen — the /solo route: a client-only "play vs bots" game with NO
@@ -25,7 +25,7 @@ export default function SoloTableScreen() {
   const saved = useMemo(() => readSolo(), [])
   const config = saved?.config ?? null
 
-  const game = useGame(config?.gameId ?? DEFAULT_GAME_ID)
+  const game = useGame(config?.gameCode ?? DEFAULT_GAME_CODE)
   const channel = useSoloChannel({
     playerId,
     config: config ?? { roomId: 'solo', seats: [], betCoin: 0 },
@@ -65,7 +65,7 @@ export default function SoloTableScreen() {
 
   return (
     <TableLayout
-      gameId={room.gameId}
+      gameCode={room.gameCode}
       betCoin={room.betCoin}
       hudLeft={
         <div className="flex items-center gap-2">

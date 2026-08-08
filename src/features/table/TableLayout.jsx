@@ -39,11 +39,11 @@ export function TableLoading() {
 /**
  * @param hudLeft   nodes for the top-left corner (Leave, Invite, status notes)
  * @param hudRight  nodes placed BEFORE the room pill (e.g. the spectator count)
- * @param gameId    shown in the room pill
+ * @param gameCode    shown in the room pill
  * @param betCoin   shown in the room pill when > 0
  * @param children  the game board — stretched edge-to-edge under the HUD
  */
-export default function TableLayout({ hudLeft, hudRight, gameId, betCoin = 0, children }) {
+export default function TableLayout({ hudLeft, hudRight, gameCode, betCoin = 0, children }) {
   return (
     <div className={ROOM_SCREEN}>
       <div className={`${HUD_LEFT} flex flex-col items-start gap-1`}>{hudLeft}</div>
@@ -51,7 +51,7 @@ export default function TableLayout({ hudLeft, hudRight, gameId, betCoin = 0, ch
       <div className={HUD_RIGHT}>
         {hudRight}
         <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/45 px-4 py-1">
-          <span className="max-w-40 truncate font-display text-sm text-white [--stroke-width:0]">{gameId}</span>
+          <span className="max-w-40 truncate font-display text-sm text-white [--stroke-width:0]">{gameCode}</span>
           {betCoin > 0 && (
             <span className="font-display text-sm text-[#FFD27A] [--stroke-width:0]">
               Bet: <CoinIcon /> {betCoin.toLocaleString()}

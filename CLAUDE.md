@@ -27,7 +27,7 @@ src/
     <Name>/<Name>.jsx         one folder per component, assets co-located
   games/                      one folder per CARD GAME
     contract.js               the game-module interface
-    index.js                  registry: id → lazy import
+    index.js                  registry: gameCode → lazy import
     teanglen/                 engine.js, match.js, Board.jsx, index.js
     kanteal/                  + verify.mjs (rule checks), analyse.mjs (balance)
   workbench/Workbench.jsx     the gallery shell (/component) — rarely edit
@@ -116,6 +116,19 @@ not an engine.
 | --- | --- |
 | `teanglen` | Teang Len / Tiến Lên — shedding, combos, tricks, ranks every finisher |
 | `kanteal` | Kanteal (កន្ទេល) — one card per turn, cycles, elimination, one winner. 2–8 players. NO central pile: played cards stay in front of their owner all game (`Table`'s `playAreas`). §6 successful-beat rule: you must WIN a completed cycle before you may finish — reaching ≤2 cards with none (`successfulBeats[seat] === 0`) cuts you; a beat that's beaten back counts for nothing (banked at cycle end, see `failsBeatGate`) |
+
+### Identifiers — say which one you mean
+
+| name | what it is |
+| --- | --- |
+| `gameCode` | the game's stable unique name — `'teanglen'`, `'kanteal'`. Keys the loader registry, rides on `RoomSnapshot.gameCode`, mirrored in the backend catalog. A public identifier: renaming one means renaming all three at once |
+| `roomId` | one room instance |
+| `playerId` | one user, durable across reconnects |
+| `seatIndex` | a seat's position at a table — positional, not an identity |
+
+Don't reintroduce a bare `id` for any of these; `id` alone never says which. (The one
+remaining exception is a component's own local key, e.g. `GameTable`'s `dealId` deal
+counter — local state, never on the wire.)
 
 A game module exports one object: `meta`, `createMatch`, `Board`, `bot`, `summarize`
 (see [src/games/contract.js](src/games/contract.js)). **Keep the interface this small** —
