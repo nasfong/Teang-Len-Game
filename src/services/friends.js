@@ -1,8 +1,8 @@
 import { apiFetch } from './http'
 
-// Friend requests. Every mutation returns the WHOLE fresh picture
-// ({ friends, incoming, outgoing }), which is why the hooks can seed the cache
-// straight from a mutation response instead of refetching.
+// Friend requests. Every mutation returns the whole fresh
+// { friends, incoming, outgoing }, which is why the hooks seed the cache from the
+// response instead of refetching.
 
 export function getFriends() {
   return apiFetch('/api/friends')
@@ -13,7 +13,7 @@ export async function searchUsers(query) {
   return results
 }
 
-/** Send a friend request — or auto-accept, if they already requested you. */
+/** Send a request — or auto-accept, if they already requested you. */
 export function sendFriendRequest(userId) {
   return apiFetch('/api/friends/requests', { method: 'POST', body: { userId } })
 }

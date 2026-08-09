@@ -7,6 +7,7 @@ import { readSolo, clearSolo } from '../features/table/soloGame.js'
 import { useGame } from '../games/useGame.js'
 import { DEFAULT_GAME_CODE } from '../games/index.js'
 import { useSession, selectUser } from '../stores/session'
+import { DEBUG_PEEK } from '../services/config'
 
 // SoloTableScreen — the /solo route: a client-only "play vs bots" game with NO
 // server room and NO other players (the "Play with Bots" toggle in CreateRoomForm
@@ -83,6 +84,7 @@ export default function SoloTableScreen() {
       <game.Board
         channel={channel}
         room={room}
+        peek={DEBUG_PEEK}
         bots
         waitingText={over ? 'Play again?' : null}
         waitingAction={

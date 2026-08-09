@@ -1,6 +1,6 @@
 import { ApiError } from '../../services/http'
 import { login, register } from '../../services/auth'
-import { API_URL } from '../../services/config'
+import { API_URL, AUTO_GUEST_ENABLED, AUTO_GUEST_PREFIX } from '../../services/config'
 import { useSession } from '../../stores/session'
 
 // Auto-guest sign-in — TESTING ENVIRONMENTS ONLY.
@@ -15,11 +15,12 @@ import { useSession } from '../../stores/session'
 // user per page load. They're stored per API origin, so pointing the build at a
 // different backend starts a fresh account instead of failing to log in to one
 // that server has never seen.
-export const AUTO_GUEST_ENABLED = import.meta.env.VITE_AUTO_GUEST === 'true'
+// Re-exported so callers keep importing the flag from the feature that owns it.
+export { AUTO_GUEST_ENABLED }
 
 // Prefix shown in the UI, so a test account is obvious at a glance. Kept inside
 // the backend's username rule: /^[a-zA-Z0-9_]{3,20}$/.
-const USERNAME_PREFIX = import.meta.env.VITE_AUTO_GUEST_PREFIX || 'test'
+const USERNAME_PREFIX = AUTO_GUEST_PREFIX
 const STORAGE_KEY = 'teanglen-auto-guest'
 
 function randomToken(length) {

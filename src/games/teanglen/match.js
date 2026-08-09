@@ -1,4 +1,4 @@
-import { deal, validatePlay, sortCards, DEFAULT_FEATURES } from './engine.js'
+import { deal, validatePlay, sortCards, bombCut, BOMB_QUAD, BOMB_FLUSH5, BOMB_FOUR_PAIRS, DEFAULT_FEATURES } from './engine.js'
 
 // match.js — the PURE, serializable turn flow for an online game. It's a
 // seat-agnostic, bot-free port of GameTable's reducer core: every function takes a
@@ -11,6 +11,29 @@ import { deal, validatePlay, sortCards, DEFAULT_FEATURES } from './engine.js'
 // Fine for a social game; hardening to private per-seat hands is a later step.
 
 const FEATURES = DEFAULT_FEATURES
+
+// ── chặt: the instant bomb penalty ───────────────────────────────────────────
+// Vietnamese/Khmer table custom — a 2 is the strongest card in the game, so cutting
+// one with a bomb is settled ON THE SPOT rather than folded into the end-of-match
+// placement payout: the owner of the murdered 2 pays the bomber then and there.
+//
+// Priced in MULTIPLES OF THE ROOM'S BET, per bomb kind. Four consecutive pairs kills
+// a PAIR of 2s, so it costs double what the single-2 cuts do.
+//
+// DISPLAY ONLY. The backend holds the same schedule (backend/src/config/games.ts)
+// and it is the authority on what actually moves — the client never names an amount,
+// only which cut happened. Keep the two in step.
+export const BOMB_PENALTY_UNITS = {
+  [BOMB_QUAD]: 1,
+  [BOMB_FLUSH5]: 1,
+  [BOMB_FOUR_PAIRS]: 2,
+}
+
+export const BOMB_LABELS = {
+  [BOMB_QUAD]: 'Four of a kind',
+  [BOMB_FLUSH5]: 'Flush straight',
+  [BOMB_FOUR_PAIRS]: 'Four pairs',
+}
 
 const nextWhere = (state, from, ok) => {
   for (let s = 1; s <= state.seats.length; s++) {
@@ -44,6 +67,10 @@ export function createMatch(seats, { startingPlayerId = null } = {}) {
     finished: seats.map(() => false),
     ranked: [], // seat indices in finish order
     beaten: [], // the play the current hand covered (drawn peeking behind)
+    // The bomb cut made by the move just played, or null — see applyPlay. Lives in
+    // the state (not in an event) so it rides game:update to EVERY seat and each one
+    // can show the same "X bombed Y" without a second broadcast.
+    lastPenalty: null, // { kind, fromSeat, toSeat, cards } — cards are the 2s that died
     phase: 'playing', // 'playing' | 'over'
     turnKey: 0, // bumps each turn — the seat-ring timer keys on it
   }
@@ -96,6 +123,15 @@ export function applyPlay(state, seat, cards) {
     ranked.push(seat)
   }
 
+  // chặt — a bomb cut. The victim is whoever owned the hand being cut (lastPlayer),
+  // and they pay the bomber immediately. Read BEFORE lastPlayer is reassigned below.
+  const kind = state.current ? bombCut(res.play, state.current, FEATURES) : null
+  const victim = state.lastPlayer
+  const penalty =
+    kind && victim !== seat
+      ? { kind, fromSeat: victim, toSeat: seat, cards: state.current.cards }
+      : null
+
   const next = {
     ...state,
     hands,
@@ -104,6 +140,7 @@ export function applyPlay(state, seat, cards) {
     lastPlayer: seat,
     finished,
     ranked,
+    lastPenalty: penalty,
   }
   return { state: settle(next, seat) }
 }
@@ -115,13 +152,21 @@ export function applySkip(state, seat) {
   if (!state.current) return { error: "You're leading — you can't pass." }
   const skipped = [...state.skipped]
   skipped[seat] = true
-  return { state: settle({ ...state, skipped }, seat) }
+  // A pass ends the previous move's bomb banner — it's a one-shot, not a standing flag.
+  return { state: settle({ ...state, skipped, lastPenalty: null }, seat) }
 }
 
 // The flags a game:play emit carries so the server can rank finishers + settle the
 // pot — derived from the resulting state, never trusted from elsewhere.
 export function deriveFlags(state, seat) {
   const flags = {}
+  // chặt — settled mid-hand, so it rides the move that caused it rather than waiting
+  // for the end-of-match pot. Only the KIND and the victim go up; the server owns the
+  // amount (bet × its own schedule) and takes the payee from the emitting player.
+  const p = state.lastPenalty
+  if (p && p.toSeat === seat) {
+    flags.bombCut = { kind: p.kind, victimPlayerId: state.seats[p.fromSeat].playerId }
+  }
   if (state.finished[seat]) {
     flags.playerFinished = true
     flags.finishedRank = state.ranked.indexOf(seat) + 1

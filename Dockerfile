@@ -3,9 +3,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Teang Len web — production image (static Vite SPA served by nginx).
 #
-# The API base URL is a BUILD-TIME value: Vite inlines import.meta.env.VITE_API_URL
-# into the JS bundle, so it must be supplied as a --build-arg and the image is
-# specific to one API origin. Rebuild to point at a different backend.
+# Config is resolved at RUN time, not build time: entrypoint.sh writes /config.js from
+# the container's environment on every start and the app reads it (src/services/config.js).
+# So one image serves every environment — `docker run -e API_URL=... `.
+#
+# The VITE_* build args below are still honoured as the baked-in DEFAULT, used when a
+# container is started without the matching env var.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ---- 1. build: produce the static dist/ bundle ----
@@ -15,19 +18,22 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 
-# Required — fail early with a clear message rather than shipping a bundle that
-# points at localhost. e.g. --build-arg VITE_API_URL=https://api.teanglen.com
+# Optional fallbacks, baked into the bundle. A container that sets API_URL overrides
+# them; leaving them unset ships an image that REQUIRES the runtime env var.
 ARG VITE_API_URL
-RUN test -n "$VITE_API_URL" || (echo "ERROR: build-arg VITE_API_URL is required (e.g. https://api.example.com)" >&2 && exit 1)
 ENV VITE_API_URL=$VITE_API_URL
 
 # Testing images only: auto-register a throw-away account so the site opens on
 # Home with no login step. Leave unset for production — the login screen is then
-# the normal entry point. e.g. --build-arg VITE_AUTO_GUEST=true
+# the normal entry point.
 ARG VITE_AUTO_GUEST
 ARG VITE_AUTO_GUEST_PREFIX
 ENV VITE_AUTO_GUEST=$VITE_AUTO_GUEST
 ENV VITE_AUTO_GUEST_PREFIX=$VITE_AUTO_GUEST_PREFIX
+
+# Debug x-ray — deliberately NOT a build arg. It is runtime-only (-e DEBUG_PEEK=true)
+# so it can never be baked into an image: an image is shared and long-lived, and this
+# flag shows every player every hand.
 
 RUN npm run build
 
@@ -35,5 +41,11 @@ RUN npm run build
 FROM nginx:1.27-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 EXPOSE 80
-# nginx:alpine already runs `nginx -g "daemon off;"` as its default CMD.
+
+# Regenerates /config.js from the environment, then execs nginx's own entrypoint.
+# CMD must be restated: overriding ENTRYPOINT does not inherit the base image's.
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

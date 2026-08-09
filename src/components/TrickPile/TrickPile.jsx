@@ -51,12 +51,18 @@ const DROP_FROM = {
  * @param from      which seat the live combo was played from — 'bottom' | 'top' |
  *                  'left' | 'right'. The cards fly in from that edge. (default
  *                  'bottom'). Re-keys nothing: new cards remount and animate once.
+ * @param badge     short caption for a combo that isn't what it looks like — a flush
+ *                  straight reads as an ordinary straight until you check every suit.
+ *                  Drawn as a chip above the combo AND lights the cards' edges, so
+ *                  it registers from across the table. Absolutely positioned: adding
+ *                  one must not shove the pile off the centre of the felt.
  */
 export default function TrickPile({
   cards = [],
   pile = [],
   size = 'md',
   from = 'bottom',
+  badge = null,
   emptyText = 'Lead any card',
   className = '',
 }) {
@@ -141,12 +147,21 @@ export default function TrickPile({
                       '--rot': `${jitter(`${id}t`, 5)}deg`,
                     }}
                   >
-                    <PlayingCard rank={card.rank} suit={card.suit} size={size} />
+                    <PlayingCard rank={card.rank} suit={card.suit} size={size} active={Boolean(badge)} />
                   </span>
                 </span>
               )
             })}
           </div>
+        )}
+
+        {/* The caption. Absolute so a badged combo sits at exactly the same place on
+            the felt as an unbadged one — a chip that pushed the pile down would make
+            the table jump every time someone played a flush straight. */}
+        {badge && cards.length > 0 && (
+          <span className="pointer-events-none absolute -top-6 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#c2f051]/60 bg-black/70 px-3 py-0.5 font-display text-[11px] tracking-wide text-[#c2f051] [--stroke-width:0] [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">
+            {badge}
+          </span>
         )}
       </div>
     </div>

@@ -13,6 +13,7 @@ import { catalogue } from '../games/index.js'
 import { writeSolo } from '../features/table/soloGame.js'
 import Notice from '../components/Notice/Notice.jsx'
 import { displayName as toDisplayName } from '../utils/user'
+import { getPref, setPref } from '../utils/prefs'
 
 // Names for the bot seats in a solo game (seat 0 is the human).
 const BOT_NAMES = ['Sophea', 'Dara', 'Rith', 'Chan', 'Mony', 'Vichea', 'Bopha']
@@ -60,6 +61,10 @@ export default function LobbyScreen() {
   }
 
   function submitCreate(values) {
+    // Remember the switch: someone practising against bots usually wants bots again
+    // next time, and someone hosting real rooms shouldn't have to turn it off twice.
+    setPref('withBots', values.withBots)
+
     // Play with Bots → a client-only game against bots, no server room and no other
     // players (see SoloTableScreen / useSoloChannel). Stash the setup in localStorage
     // and jump to /solo; the human takes seat 0 and bots fill the rest.
@@ -131,6 +136,9 @@ export default function LobbyScreen() {
           balance={coin}
           games={catalogue}
           defaultName={displayName}
+          // Read here, not inside the form: the modal only mounts while `creating`,
+          // so each open picks up the value the last submit stored.
+          defaultWithBots={getPref('withBots', false) === true}
           creating={createRoom.isPending}
           onCancel={() => setCreating(false)}
           onSubmit={submitCreate}

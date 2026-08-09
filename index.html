@@ -29,6 +29,11 @@
     <meta name="apple-mobile-web-app-title" content="Teang Len" />
     <!-- iOS home-screen icon must be a PNG (Safari ignores SVG here). -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Runtime config (API origin, flags). NOT bundled and never fingerprinted: the
+         container's entrypoint rewrites it at start-up, so a deploy changes an env var
+         and restarts instead of rebuilding. A classic script, so it runs before the
+         deferred module below. -->
+    <script src="/config.js"></script>
     <!-- Boot loader — inlined so it paints on the FIRST frame, before any JS or the
          app bundle downloads. React replaces it (inside #root) with the real
          progress preloader once the small entry chunk has loaded. -->

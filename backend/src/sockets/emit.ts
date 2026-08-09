@@ -34,6 +34,17 @@ export function broadcastPlayerFinished(io: Server, roomId: string, playerId: st
   io.to(roomId).emit(SERVER_EVENTS.PLAYER_FINISHED, { roomId, playerId, rank })
 }
 
+// A mid-hand transfer that already moved (Teang Len's chặt). Carries the settled
+// amount so seats can roll their balances without refetching, and the kind so the
+// board can caption it.
+export function broadcastGamePenalty(
+  io: Server,
+  roomId: string,
+  penalty: { kind: string; fromPlayerId: string; toPlayerId: string; amount: number },
+): void {
+  io.to(roomId).emit(SERVER_EVENTS.GAME_PENALTY, { roomId, ...penalty })
+}
+
 export function broadcastGameEnd(
   io: Server,
   roomId: string,

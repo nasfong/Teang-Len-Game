@@ -29,6 +29,7 @@ export function useSoloChannel({ playerId, config, initialGame = null }) {
   const [game, setGame] = useState(initialGame) // { gameState, version, triggeredBy, turnStartedAt } | null
   const [rankings, setRankings] = useState(initialGame?.gameState?.phase === 'over' ? [] : null)
   const [settlements, setSettlements] = useState(null)
+  const [penalty, setPenalty] = useState(null)
 
   // Persist every state change so a reload resumes the hand.
   useEffect(() => {
@@ -37,6 +38,21 @@ export function useSoloChannel({ playerId, config, initialGame = null }) {
 
   const commit = useCallback(
     (gs, flags) => {
+      // Mid-hand penalties (Teang Len's chặt). Online the server prices these and
+      // broadcasts game:penalty; offline nothing is at stake, so this only mirrors the
+      // SHAPE, keeping the board's UI path identical. `amount: null` — pricing is the
+      // game's business and this hook stays game-agnostic; the board fills it in.
+      // Games whose state has no `lastPenalty` never trigger it.
+      if (gs?.lastPenalty) {
+        const { kind, fromSeat, toSeat } = gs.lastPenalty
+        setPenalty((prev) => ({
+          kind,
+          fromPlayerId: gs.seats[fromSeat]?.playerId,
+          toPlayerId: gs.seats[toSeat]?.playerId,
+          amount: null,
+          seq: (prev?.seq ?? 0) + 1,
+        }))
+      }
       setGame((prev) => ({
         gameState: gs,
         version: (prev?.version ?? 0) + 1,
@@ -84,7 +100,12 @@ export function useSoloChannel({ playerId, config, initialGame = null }) {
       gameCode: config.gameCode,
       betCoin: config.betCoin,
       maxPlayers: config.maxPlayers,
-      status: game ? 'playing' : 'waiting',
+      // Back to 'waiting' once the match ends, exactly as the server does online. A
+      // Board checks `playing` BEFORE `over`, so leaving this at 'playing' kept it in
+      // the in-play branch at match end and its `waitingAction` slot — the New Game
+      // button — was never rendered. Keyed on `rankings` rather than the game's own
+      // phase so it stays game-agnostic.
+      status: game && !rankings ? 'playing' : 'waiting',
       hostPlayerId: playerId,
       players,
       rules: { winnerStartsNextGame: false },
@@ -92,7 +113,7 @@ export function useSoloChannel({ playerId, config, initialGame = null }) {
       spectatorCount: 0,
       pendingLeavePlayerIds: [],
     }
-  }, [config, game, playerId])
+  }, [config, game, playerId, rankings])
 
   return {
     playerId,
@@ -100,6 +121,7 @@ export function useSoloChannel({ playerId, config, initialGame = null }) {
     game,
     rankings,
     settlements,
+    penalty,
     timeoutCount: 0, // no server turn timer offline — bots auto-play, the human plays at their pace
     error: null,
     start,

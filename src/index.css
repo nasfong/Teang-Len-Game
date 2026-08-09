@@ -59,6 +59,16 @@
      rounded overlay hugging the avatar at match end (see Table's PlayerSeat). Loops
      gently — it marks the winner for the whole results countdown, not a one-shot. */
   --animate-winner-glow: winner-glow 1.4s ease-in-out infinite;
+
+  /* Phase announcement → `animate-announce` (PhaseBanner). One animation covers the
+     caption's whole life (in, hold, out), so the component needs no exit state. Like
+     animate-countdown the DURATION comes from the element, never a var() here — hence
+     the keyframes below are in PERCENTAGES, so one token stretches to any length. */
+  --animate-announce: announce 2600ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  /* Its two companion layers: the bloom behind it (opacity only, so `announce-plain`
+     serves) and the one light sweep across the panel as it lands. */
+  --animate-announce-glow: announce-plain 2600ms ease-out forwards;
+  --animate-announce-sheen: announce-sheen 2600ms ease-out forwards;
 }
 
 /* Full-screen shell height. Use this on any screen that should fill the window —
@@ -283,6 +293,60 @@
 
 /* Gold halo pulsing around the winning seat's avatar. Spread-only box-shadow (no
    layout), so it's cheap; the ring never leaves a static frame, hence the loop. */
+/* A phase caption: rises in past its size, settles, holds readable, lifts away. */
+@keyframes announce {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0) scale(1.03);
+  }
+  20% {
+    transform: translateY(0) scale(1);
+  }
+  84% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.97);
+  }
+}
+
+/* The light sweep. Travels its own width many times over to cross the whole panel,
+   then parks off the far edge where the panel's overflow-hidden clips it. */
+@keyframes announce-sheen {
+  0% {
+    opacity: 0;
+    transform: translateX(0) skewX(-20deg);
+  }
+  12% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+    transform: translateX(520%) skewX(-20deg);
+  }
+}
+
+/* Reduced-motion twin of `announce` — same timing, no travel or scale. */
+@keyframes announce-plain {
+  0% {
+    opacity: 0;
+  }
+  8%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes winner-glow {
   0%,
   100% {
@@ -326,5 +390,10 @@
        says who won. Snap to the resting glow and hold it (Confetti.jsx already
        renders nothing under reduced motion, so the glow carries the moment alone). */
     --animate-winner-glow: winner-glow 1ms linear forwards;
+    /* A still twin, NOT 1ms: `announce` ends at opacity 0, so flattening it would
+       hide the caption for its whole life. The sheen is pure decoration — dropping it
+       parks the highlight off-panel, where overflow-hidden hides it. */
+    --animate-announce: announce-plain 2600ms linear forwards;
+    --animate-announce-sheen: none;
   }
 }

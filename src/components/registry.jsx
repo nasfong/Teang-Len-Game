@@ -52,6 +52,7 @@ import ProgressBar from './ProgressBar/ProgressBar.jsx'
 import DailyBonus from './DailyBonus/DailyBonus.jsx'
 import Badge from './Badge/Badge.jsx'
 import Notice from './Notice/Notice.jsx'
+import PhaseBanner from './PhaseBanner/PhaseBanner.jsx'
 // The lobby's glass panel needs art behind it to frost — reuse HomePage's landing
 // background for the RoomPage preview.
 import homeBackground from './HomePage/background.webp'
@@ -1296,6 +1297,33 @@ const NoticePreview = () => (
   </div>
 )
 
+// PhaseBanner — self-dismissing, so the preview needs a way to re-fire it. Each tap
+// hands over a NEW id, which is exactly how a caller announces a repeatable phase.
+const PhaseBannerPreview = () => {
+  const [event, setEvent] = useState(null)
+  const announce = (e) => setEvent({ ...e, id: `${e.id}-${Date.now()}` })
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative flex h-48 w-full max-w-md items-center justify-center overflow-hidden rounded-2xl border-[3px] border-[#00376B] bg-linear-to-b from-[#2f7d4f] to-[#1c4d31]">
+        <span className="font-display text-sm text-white/50 [--stroke-width:0]">the felt</span>
+        <PhaseBanner event={event} />
+      </div>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button size="sm" variant="lime" outline="navy" onClick={() => announce({ id: 'challenge', icon: '\u2694\ufe0f', title: 'FINAL CHALLENGE', note: 'Commit your last two cards' })}>
+          Challenge
+        </Button>
+        <Button size="sm" variant="blue" outline="navy" onClick={() => announce({ id: 'round', icon: '\ud83c\udccf', title: 'ROUND 2', note: 'Reveal your held card' })}>
+          Round 2
+        </Button>
+        <Button size="sm" variant="red" outline="navy" onClick={() => announce({ id: 'last', icon: '\u23f3', title: 'LAST CARD' })}>
+          Last card
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 const TablePagePreview = () => {
   const [leaving, setLeaving] = useState(false)
 
@@ -1405,6 +1433,14 @@ export const components = [
     notes:
       'The one inline message pill — a failed join, a rejected create, a claimed reward. Self-contained, Tailwind-only. Replaces the hand-rolled red/gold strips that each screen used to write inline (and that had drifted apart in padding and opacity). Deliberately does NOT position itself: a floating toast wraps it in a positioned element, so no position class is ever passed to its root (Trap 1). Props: tone (error/success/neutral), size (sm/md/lg — lg is the floating-toast weight and adds a shadow), className, children.',
     Component: NoticePreview,
+  },
+  {
+    name: 'PhaseBanner',
+    kind: 'component',
+    status: 'done',
+    notes:
+      'A phase announcement for the middle of a table \u2014 icon + title + optional note, springs in, holds, fades out, then unmounts itself. Self-contained, Tailwind-only; three layers on the global animate-announce/-glow/-sheen tokens (index.css) \u2014 a lime bloom behind it, the panel springing in past its size, and one light sweep across the face as it lands. All take their length from an inline animation-duration, so the set stretches to any duration (same pattern as animate-countdown). Knows nothing about any game: the content is DATA, so a betting round or a last-card warning is the same component with different words. Self-dismissing on a changing `event.id`, like EmoteBubble \u2014 the caller never clears it, which matters when the phase that fired it stays true for the rest of the match. pointer-events-none end to end, so it never blocks a tap. Under prefers-reduced-motion it fades in place instead of travelling (it must NOT collapse to 1ms \u2014 the animation ends at opacity 0). Props: event ({ id, icon?, title, note? } | null), duration, className.',
+    Component: PhaseBannerPreview,
   },
   {
     name: 'Badge',

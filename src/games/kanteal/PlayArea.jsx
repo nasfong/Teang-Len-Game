@@ -19,7 +19,7 @@ import PlayingCard from '../../components/PlayingCard/PlayingCard.jsx'
 // `dense` exists because the play ring gets crowded: at 6 and 8 seats the adjacent
 // slots are only ~92–95px apart, so dense keeps the small 32px `xs` card and the
 // tight 9px step (row = 32 + 5×9 = 77px) to clear the neighbours by 15px+. (Measured,
-// not guessed: the slot spacing comes straight from Table's PLAY_RING.)
+// not guessed: the slot spacing comes straight from Table's PREVIEW_RING.)
 const CARD_W = 48
 const STEP = 20
 const CARD_W_DENSE = 32
@@ -27,13 +27,21 @@ const STEP_DENSE = 9
 
 /**
  * @param played  the seat's history, oldest first: [{ card } | { hidden: true }]
- * @param currentId  id of the card currently holding the table, if this seat owns
- *                   it — drawn with the gold edge so "what you must beat" is still
- *                   obvious once the centre pile is gone
+ * @param currentId  id of the card currently holding the table — drawn with the yellow
+ *                   `active` edge so "what you must beat" stays obvious with no centre
+ *                   pile. Ids are unique, so only one card on the table ever matches
+ * @param wonId   id of the card whose beat took the round just ended — same edge, green.
+ *                Reads as "yellow held → green won", and points at whoever opens next
  * @param label   optional caption under the row (the seat's name)
  * @param dense   tighter overlap for crowded tables (5+ seats) — see STEP_DENSE
  */
-export default function PlayArea({ played = [], currentId = null, label = null, dense = false }) {
+export default function PlayArea({
+  played = [],
+  currentId = null,
+  wonId = null,
+  label = null,
+  dense = false,
+}) {
   if (!played.length) return null
   const step = dense ? STEP_DENSE : STEP
   const cardW = dense ? CARD_W_DENSE : CARD_W
@@ -45,17 +53,18 @@ export default function PlayArea({ played = [], currentId = null, label = null, 
           <span
             key={i}
             className="block"
-            style={{ marginLeft: i === 0 ? 0 : `${step - cardW}px` }}
+            // style={{ marginLeft: i === 0 ? 0 : `${step - cardW}px` }}
           >
             <PlayingCard
               size={dense ? 'xs' : 'sm'}
               faceDown={Boolean(entry.hidden)}
               rank={entry.card?.rank}
               suit={entry.card?.suit}
-              // The live card sits proud of its own history so it reads as active
-              // rather than as just the newest thing in the row.
-              className={entry.card && entry.card.id === currentId ? '-translate-y-1.5' : ''}
-              selected={Boolean(entry.card && entry.card.id === currentId)}
+              // `active`/`won`, not `selected`: gold means "you picked this in your
+              // hand", and these are the table's state, not your choice. They own their
+              // own lift, so nothing here needs a translate class.
+              active={Boolean(entry.card && entry.card.id === currentId)}
+              won={Boolean(entry.card && entry.card.id === wonId)}
             />
           </span>
         ))}

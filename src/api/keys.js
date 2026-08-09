@@ -1,7 +1,5 @@
-// Query keys, in one place. Every useQuery/invalidateQueries in the app reads from
-// here — previously these were bare string literals spread across the query hooks
-// AND their invalidation sites (the table screen invalidated ['wallet'] by hand),
-// so a rename could silently miss an invalidation and leave stale data on screen.
+// Query keys in one place — every useQuery and invalidateQueries reads from here, so
+// a rename can't silently miss an invalidation site.
 export const queryKeys = {
   rooms: ['rooms'],
   room: (roomId) => ['room', roomId],

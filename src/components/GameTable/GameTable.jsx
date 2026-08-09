@@ -4,7 +4,8 @@ import Hand from '../Hand/Hand.jsx'
 import TrickPile from '../TrickPile/TrickPile.jsx'
 import TurnTimer from '../TurnTimer/TurnTimer.jsx'
 import Button from '../Button/Button.jsx'
-import { deal, classify, canBeat, validatePlay, chooseBotMove, sortCards, label, DEFAULT_FEATURES } from '../../games/teanglen/engine.js'
+import { deal, classify, canBeat, validatePlay, sortCards, label, DEFAULT_FEATURES } from '../../games/teanglen/engine.js'
+import { chooseBotMoveElite } from '../../games/teanglen/ai.js'
 
 // GameTable — a playable Teang Len demo. Deals four seats, runs the turn/skip/
 // trick/rank flow from GAME_RULES.md, and drives the three other seats as simple
@@ -274,7 +275,15 @@ export default function GameTable({ bare = false, fill = false, className = '' }
     if (phase !== 'playing') return
     if (seats[currentPlayer].isHuman) return
     const id = setTimeout(() => {
-      const move = chooseBotMove(hands[currentPlayer], current, FEATURES)
+      // The elite AI (games/teanglen/ai.js) reads the WHOLE state, not just this
+      // seat's hand — that's what lets it block, race and hold bombs. This reducer's
+      // state is shaped exactly like match.js's gameState, so it can be passed
+      // straight in. Omniscient, like solo-vs-bots: it's a local demo.
+      let move = chooseBotMoveElite(state, currentPlayer)
+      // null means PASS, which is only legal while following. If a lead somehow
+      // produced nothing, shed the lowest card rather than stalling the demo on a
+      // rejected skip.
+      if (!move && !current) move = [sortCards(hands[currentPlayer])[0]]
       if (move) dispatch({ type: 'play', seat: currentPlayer, cards: move })
       else dispatch({ type: 'skip', seat: currentPlayer })
     }, BOT_DELAY_MS)

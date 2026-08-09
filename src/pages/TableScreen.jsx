@@ -11,6 +11,7 @@ import { useGame } from '../games/useGame.js'
 import { DEFAULT_GAME_CODE } from '../games/index.js'
 import { useRoom } from '../api/useRooms'
 import { queryKeys } from '../api/keys'
+import { DEBUG_PEEK } from '../services/config'
 
 // TableScreen — the /table/:roomId route. The board is ALWAYS on screen: you land
 // here, the seats fill, a countdown auto-starts once there are 2+ players (the host
@@ -45,9 +46,15 @@ export default function TableScreen() {
   }, [isError, navigate])
 
   // A finished game settled wallets server-side — refresh so the balance is current.
+  // A mid-hand bomb penalty (Teang Len's chặt) moves coins too, so it refreshes on
+  // the same path; `seq` bumps per penalty, so a repeat of the same bomb still fires.
   useEffect(() => {
     if (channel.rankings) queryClient.invalidateQueries({ queryKey: queryKeys.wallet })
   }, [channel.rankings, queryClient])
+
+  useEffect(() => {
+    if (channel.penalty?.seq) queryClient.invalidateQueries({ queryKey: queryKeys.wallet })
+  }, [channel.penalty?.seq, queryClient])
 
   // `game` shares the room's loading state: its chunk is fetched the moment the room
   // arrives, and the board can't render without it anyway.
@@ -112,6 +119,7 @@ export default function TableScreen() {
       <game.Board
         channel={channel}
         room={room}
+        peek={DEBUG_PEEK}
         waitingText={waitingText}
         waitingAction={
           canStartNow ? (

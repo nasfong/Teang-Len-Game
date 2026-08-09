@@ -1,9 +1,7 @@
 import { apiFetch } from './http'
 
-// Room requests — one function per backend endpoint, no React and no cache policy.
-// Caching, invalidation and the socket stream live in api/useRooms.js; keeping the
-// requests here means non-React callers (the cold-boot active-room recovery) hit the
-// same definitions instead of hand-writing a path.
+// Room requests — one function per endpoint, no React, no cache policy (that's
+// api/useRooms.js). Non-React callers use these too (cold-boot room recovery).
 
 export async function listRooms() {
   const { rooms } = await apiFetch('/api/rooms')
@@ -15,14 +13,13 @@ export async function getRoom(roomId) {
   return room
 }
 
-// The room the caller is already seated in, or null. Used once per app launch to
-// send a returning player back to their table.
+/** The room the caller is already seated in, or null. */
 export async function getActiveRoom() {
   const { room } = await apiFetch('/api/rooms/active')
   return room ?? null
 }
 
-/** @param payload {{ name, gameCode, betCoin, maxPlayers }} — see the backend's createRoomSchema. */
+/** @param payload {{ name, gameCode, betCoin, maxPlayers }} */
 export function createRoom(payload) {
   return apiFetch('/api/rooms', { method: 'POST', body: payload })
 }

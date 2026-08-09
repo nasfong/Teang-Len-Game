@@ -43,6 +43,9 @@ const schema = yup.object({
  *               portable (it must not reach into src/games/), and so the workbench
  *               can preview it with fake entries. One game or none hides the row:
  *               a picker with a single option is just noise.
+ * @param defaultWithBots  initial state of the "Play with Bots" switch. A prop, not
+ *               a lookup, so remembering the last choice stays the app's business —
+ *               this folder must drag out with no storage of its own.
  */
 export default function CreateRoomForm({
   submitLabel = 'Create',
@@ -50,6 +53,7 @@ export default function CreateRoomForm({
   creating = false,
   balance,
   defaultName = '',
+  defaultWithBots = false,
   games = [],
   onSubmit,
   onCancel,
@@ -63,7 +67,10 @@ export default function CreateRoomForm({
   } = useForm({
     mode: 'onTouched',
     resolver: yupResolver(schema),
-    defaultValues: { roomName: defaultName, betAmount: 1000, maxPlayers: 4, gameCode: games[0]?.code, withBots: false },
+    // Read once, on mount. The caller remounts this form each time the modal opens,
+    // so a remembered `defaultWithBots` lands on every open without the form itself
+    // knowing anything about where it was stored.
+    defaultValues: { roomName: defaultName, betAmount: 1000, maxPlayers: 4, gameCode: games[0]?.code, withBots: defaultWithBots },
   })
 
   const betAmount = watch('betAmount')

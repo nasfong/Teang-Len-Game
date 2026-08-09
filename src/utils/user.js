@@ -1,6 +1,4 @@
-// Display name, one definition. The session user carries an optional displayName
-// and a required username; screens showed `user?.displayName ?? user?.username ??
-// 'Player'` inline, so a change to the fallback had to be made in every screen.
+/** Display name, one definition — screens used to inline this fallback chain. */
 export function displayName(user) {
   return user?.displayName ?? user?.username ?? 'Player'
 }

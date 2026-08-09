@@ -19,6 +19,10 @@ const initialState = {
   game: null, // { gameState, version, triggeredBy, turnStartedAt } from game:update
   rankings: null, // set on game:end — non-null means the match is over
   settlements: null, // set on game:end — [{ playerId, delta }] coin change per seat
+  // Latest mid-hand transfer (game:penalty — Teang Len's chặt), already applied to
+  // both wallets by the server. `seq` bumps on every one so a board can re-trigger
+  // its animation even when the same bomb kind hits the same pair twice.
+  penalty: null, // { kind, fromPlayerId, toPlayerId, amount, seq }
   timeoutCount: 0, // bumps on each turn:timeout (the acting client decides what to do)
   error: null, // last server error message
 }
@@ -33,6 +37,8 @@ function reducer(state, action) {
       return { ...state, game: action.game, rankings: null, settlements: null }
     case 'timeout':
       return { ...state, timeoutCount: state.timeoutCount + 1 }
+    case 'penalty':
+      return { ...state, penalty: { ...action.penalty, seq: (state.penalty?.seq ?? 0) + 1 } }
     case 'end':
       return {
         ...state,
@@ -61,11 +67,13 @@ export function useRoomChannel(roomId) {
     const onGame = (game) => dispatch({ type: 'game', game })
     const onTimeout = () => dispatch({ type: 'timeout' })
     const onEnd = ({ rankings, gameState, settlements }) => dispatch({ type: 'end', rankings, gameState, settlements })
+    const onPenalty = (penalty) => dispatch({ type: 'penalty', penalty })
     const onError = ({ message }) => dispatch({ type: 'error', message })
 
     socket.on(SERVER_EVENTS.ROOM_UPDATE, onRoom)
     socket.on(SERVER_EVENTS.GAME_UPDATE, onGame)
     socket.on(SERVER_EVENTS.TURN_TIMEOUT, onTimeout)
+    socket.on(SERVER_EVENTS.GAME_PENALTY, onPenalty)
     socket.on(SERVER_EVENTS.GAME_END, onEnd)
     socket.on(SERVER_EVENTS.ERROR, onError)
 
@@ -78,6 +86,7 @@ export function useRoomChannel(roomId) {
       socket.off(SERVER_EVENTS.ROOM_UPDATE, onRoom)
       socket.off(SERVER_EVENTS.GAME_UPDATE, onGame)
       socket.off(SERVER_EVENTS.TURN_TIMEOUT, onTimeout)
+      socket.off(SERVER_EVENTS.GAME_PENALTY, onPenalty)
       socket.off(SERVER_EVENTS.GAME_END, onEnd)
       socket.off(SERVER_EVENTS.ERROR, onError)
       socket.off('connect', join)

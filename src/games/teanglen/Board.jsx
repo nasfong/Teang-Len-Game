@@ -3,8 +3,18 @@ import Table from '../../components/Table/Table.jsx'
 import Hand from '../../components/Hand/Hand.jsx'
 import TrickPile from '../../components/TrickPile/TrickPile.jsx'
 import Button from '../../components/Button/Button.jsx'
-import { classify, canBeat, label, suggestSelection, chooseBotMovePro, DEFAULT_FEATURES } from './engine.js'
-import { applyPlay, applySkip, deriveFlags, mySeatIndex, lowestCard } from './match.js'
+import PhaseBanner from '../../components/PhaseBanner/PhaseBanner.jsx'
+import { classify, canBeat, label, suggestSelection, DEFAULT_FEATURES } from './engine.js'
+import { chooseBotMoveElite } from './ai.js'
+import {
+  applyPlay,
+  applySkip,
+  deriveFlags,
+  mySeatIndex,
+  lowestCard,
+  BOMB_PENALTY_UNITS,
+  BOMB_LABELS,
+} from './match.js'
 
 // OnlineBoard — the networked table, ALWAYS on screen (lobby and gameplay are the
 // same place). Before the deal it shows the felt with the seated players and a
@@ -20,6 +30,10 @@ import { applyPlay, applySkip, deriveFlags, mySeatIndex, lowestCard } from './ma
 const FEATURES = DEFAULT_FEATURES
 const TURN_SECONDS = 15
 const SEAT_DIR = ['bottom', 'right', 'top', 'left']
+
+// For the flush-straight caption. PlayingCard keeps its own copy for the card faces;
+// this is one label, not worth exporting a shared map for.
+const SUIT_GLYPH = { spades: '♠', clubs: '♣', diamonds: '♦', hearts: '♥' }
 
 // When a trick resolves (everyone passed), the match nulls `current` at once — it
 // must, since the winner now owes a fresh lead. But blanking the felt the instant
@@ -96,7 +110,30 @@ function useDelayedReveal(over) {
   return revealing
 }
 
-export default function OnlineBoard({ channel, room, waitingText, waitingAction = null, bots = false }) {
+// How long a bomb penalty stays on screen — the felt banner and the two +/− chips.
+// Long enough to read who paid whom, short enough that the next turn isn't blocked.
+const PENALTY_SHOW_MS = 3200
+
+/** The current bomb penalty, or null once it has had its moment. Keyed on the
+ *  channel's `seq`, so the same bomb landing twice in a row still re-fires. */
+function useLivePenalty(penalty) {
+  const [live, setLive] = useState(null)
+  const seq = penalty?.seq ?? 0
+  useEffect(() => {
+    if (!seq) return
+    setLive(penalty)
+    const t = setTimeout(() => setLive(null), PENALTY_SHOW_MS)
+    return () => clearTimeout(t)
+    // `penalty` is deliberately not a dep — a new object identity with the same seq
+    // (any re-render of the channel) would otherwise restart the timer forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seq])
+  return live
+}
+
+// `peek` — DEBUG ONLY: draw every opponent's hand face-up and dimmed. A prop, not an
+// import, so this folder keeps its one-way dependency on the app (same as `bots`).
+export default function OnlineBoard({ channel, room, waitingText, waitingAction = null, bots = false, peek = false }) {
   const playerId = channel.playerId
   // Fall back to the room snapshot's persisted gameState so someone who arrives
   // mid-game (a spectator, or a player who took a seat mid-hand) sees the game in
@@ -122,6 +159,10 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
   // card and the revealed hands land a beat before "X wins!" (see useDelayedReveal).
   const over = Boolean(gs) && gs.phase === 'over'
   const revealing = useDelayedReveal(over)
+
+  // chặt — a bomb cut a 2 and the coins ALREADY moved (the server settled it on the
+  // move; offline it's display-only). This just gives it its moment on the felt.
+  const penalty = useLivePenalty(channel.penalty)
 
   useEffect(() => {
     if (channel.timeoutCount === 0) return
@@ -181,9 +222,11 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
       // a disconnected human, which stays PASSIVE (pass when following, lead the lowest).
       let res, passed
       if (bots) {
-        const opponentCounts = s.hands.map((h) => h.length).filter((len, i) => i !== turnSeat && len > 0)
-        const cards = chooseBotMovePro(s.hands[turnSeat], s.current, { opponentCounts })
-        passed = !cards // chooseBotMovePro only returns null while following (a real pass)
+        // Solo practice: every other seat is a bot, so the elite AI may read the whole
+        // table (ai.js `omniscient`). Nothing of that reaches the UI — it only sharpens
+        // the move. AFK cover for a real human takes the passive branch below instead.
+        const cards = chooseBotMoveElite(s, turnSeat)
+        passed = !cards // null only ever means a real pass while following
         res = cards ? applyPlay(s, turnSeat, cards) : applySkip(s, turnSeat)
       } else {
         passed = Boolean(s.current)
@@ -210,6 +253,39 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
   // Match-end coin change per player, from the server's settlement (game:end).
   const deltaById = new Map((channel.settlements ?? []).map((x) => [x.playerId, x.delta]))
 
+  // The live bomb penalty as a per-player +/−, so the same chip that shows the
+  // match settlement shows this one. `amount` is the server's settled figure; solo
+  // play leaves it null, so price it here from the mirrored schedule (the board is
+  // Teang Len's, so knowing Teang Len's rates is its business — see BOMB_PENALTY_UNITS).
+  const penaltyAmount =
+    penalty && (penalty.amount ?? (BOMB_PENALTY_UNITS[penalty.kind] ?? 0) * (room?.betCoin ?? 0))
+  const penaltyById = new Map(
+    penalty && penaltyAmount
+      ? [
+          [penalty.fromPlayerId, -penaltyAmount],
+          [penalty.toPlayerId, penaltyAmount],
+        ]
+      : [],
+  )
+
+  // The felt announcement. Driven by `gs.lastPenalty` — the bomb itself — NOT by the
+  // coin transfer: the server only broadcasts game:penalty when the room has a bet, so
+  // keying on that meant a bomb on a FREE table dropped in complete silence. The play
+  // is in the relayed state, so every seat announces it whether money moved or not.
+  // Keyed on turnKey, which changes per move, so a second bomb re-announces.
+  const nameOf = (id) => seatSource.find((s) => s.playerId === id)?.name ?? 'Someone'
+  const bomb = playing && !over ? gs.lastPenalty : null
+  const bombEvent = bomb
+    ? {
+        id: `bomb-${gs.turnKey}`,
+        icon: '💣',
+        title: 'BOMB!',
+        note: penaltyAmount
+          ? `${BOMB_LABELS[bomb.kind] ?? 'Bomb'} — ${nameOf(seatSource[bomb.fromSeat]?.playerId)} pays ${penaltyAmount} to ${nameOf(seatSource[bomb.toSeat]?.playerId)}`
+          : `${BOMB_LABELS[bomb.kind] ?? 'Bomb'} — ${nameOf(seatSource[bomb.toSeat]?.playerId)} cut ${nameOf(seatSource[bomb.fromSeat]?.playerId)}'s 2`,
+      }
+    : null
+
   // Seats rotated so my (or, spectating, the anchor) seat is slot 0 (bottom).
   const players = Array.from({ length: n }, (_, r) => {
     const s = seatSource[abs(r)]
@@ -234,8 +310,9 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
       coin,
       rank: place > 0 ? place : null,
       winner: place === 1,
-      // The +/− coins, shown with the reveal alongside the placements.
-      coinDelta: revealing ? (delta || null) : null,
+      // The +/− coins. Two occasions, and they can't overlap: the match settlement at
+      // the reveal, and a bomb penalty mid-hand. The settlement wins if they ever do.
+      coinDelta: revealing ? (delta || null) : (penaltyById.get(s.playerId) ?? null),
     }
   })
 
@@ -262,6 +339,16 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
     ? { cards: gs.current?.cards ?? [], pile: gs.beaten ?? [], fromSeat: gs.lastPlayer ?? 0 }
     : heldTrick
 
+  // A flush straight is invisible unless you check all five suits — so say so.
+  // Classified from the cards ON SCREEN, not from gs.current: the felt holds a won
+  // trick for a beat after the match state has already nulled it (useHeldTrick), and
+  // the caption has to survive that or it would blink out early.
+  const trickPlay = finalTrick.cards.length ? classify(finalTrick.cards, FEATURES) : null
+  const trickBadge =
+    trickPlay?.type === 'flush_straight'
+      ? `${SUIT_GLYPH[trickPlay.top.suit] ?? ''} FLUSH STRAIGHT${trickPlay.count === 5 ? ' · BOMB' : ''}`
+      : null
+
   const opponentHands = Array.from({ length: n }, (_, r) => {
     if (!showHands) return null
     // My own seat (slot 0): while PLAYING my hand is the interactive fan on the
@@ -276,6 +363,17 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
     // Revealed the instant the game ends (`over`): the whole remaining hand, face up
     // and flat so it reads at a glance in the small slot beside the seat. Playing:
     // one back with a count badge.
+    // X-ray (peek): the same flat face-up row the end-of-match reveal uses, dimmed so
+    // it never reads as a real reveal. It draws what the relayed state already
+    // carries — every hand — so nothing extra is fetched or exposed here; the flag
+    // just stops hiding it. Debug builds only (services/config.js DEBUG_PEEK).
+    if (peek && !over) {
+      return (
+        <span key={r} className="block opacity-45 saturate-50">
+          <Hand cards={h} size="xs" spread={0} curve={0} spacing={16} maxWidth={220} />
+        </span>
+      )
+    }
     return over ? (
       <Hand key={r} cards={h} size="sm" spread={0} curve={0} spacing={22} maxWidth={300} />
     ) : (
@@ -307,7 +405,13 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
         // selection by hand, or that press was a deselect, leave it exactly as it is.
         if (sel.length !== 1 || sel[0] !== id) return sel
         const tapped = myHand.find((c) => c.id === id)
-        const suggestion = isMyTurn ? suggestSelection(myHand, current, tapped, FEATURES) : null
+        // Runs OFF-TURN too: waiting is exactly when there's time to line up an
+        // answer, and on a 15-second turn timer arriving with the combination
+        // already built is most of the value. Solved against the table as it stands
+        // right now — if someone beats it before your turn, the selection stays put
+        // and the hint says it no longer answers, rather than silently changing
+        // under you. Playing is still gated on `isMyTurn` (see canPlaySelection).
+        const suggestion = suggestSelection(myHand, current, tapped, FEATURES)
         return suggestion ? suggestion.map((c) => c.id) : sel
       }
       if (sel.includes(id)) return sel.filter((x) => x !== id) // deselect
@@ -331,7 +435,17 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
     if (over) return null // the felt is showing the final card / reveal, not a turn hint
     if (isSpectator) return playing ? `👁 Spectating — ${gs.seats[gs.currentPlayer].name} to play` : '👁 Spectating'
     if (!playing) return null
-    if (!isMyTurn) return `Waiting for ${gs.seats[gs.currentPlayer].name}…`
+    // Off-turn you can now build a selection, so say whether it will actually answer
+    // when your turn comes — a silent "Waiting…" over a ready combination is the one
+    // thing that would make pre-selecting feel broken.
+    if (!isMyTurn) {
+      const waiting = `Waiting for ${gs.seats[gs.currentPlayer].name}…`
+      if (!selectedPlay) return waiting
+      const answers = !current || canBeat(selectedPlay, current, FEATURES)
+      return answers
+        ? `${label(selectedPlay)} ready — ${waiting}`
+        : `Your ${label(selectedPlay)} won't beat the ${label(current)}`
+    }
     if (selectedPlay) return canPlaySelection ? `Play your ${label(selectedPlay)}` : `Your ${label(selectedPlay)} won't beat the ${label(current)}`
     if (selectedCards.length) return 'Not a valid combination'
     return current ? `Beat the ${label(current)}, or pass` : 'Your lead — play any combination'
@@ -414,6 +528,7 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
               cards={finalTrick.cards}
               pile={finalTrick.pile}
               size="sm"
+              badge={trickBadge}
               from={SEAT_DIR[rel(finalTrick.fromSeat)]}
               emptyText={gs.currentPlayer === mySeat ? 'Your lead' : `${gs.seats[gs.currentPlayer].name} to lead`}
             />
@@ -427,6 +542,10 @@ export default function OnlineBoard({ channel, room, waitingText, waitingAction 
               {waitingAction}
             </div>
           )}
+
+          {/* chặt — a sibling of the centre content, not part of it, so the trick pile
+              keeps showing underneath and the layer stays pointer-events-none. */}
+          <PhaseBanner event={bombEvent} duration={PENALTY_SHOW_MS} />
         </Table>
 
         {/* The two turn actions, centred above the hand. Red PASS / green PLAY is

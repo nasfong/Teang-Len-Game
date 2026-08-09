@@ -108,7 +108,15 @@ function Back({ size }) {
  * @param suit      'spades' | 'hearts' | 'diamonds' | 'clubs'
  * @param faceDown  show the back (opponents' hands, the draw pile). Toggling it
  *                  flips the card over with a 3D turn.
- * @param selected  lifted, ready to play
+ * @param selected  YOU picked this one — lifted, gold edge
+ * @param active    the card in play right now (Kanteal's card to beat) — lifted,
+ *                  yellow edge + glow. Different owner from `selected`: one is your
+ *                  choice, the other is the table's state, and they must not look
+ *                  alike.
+ * @param won       that card's beat HELD and took the round — lifted, green edge.
+ *                  The yellow→green flip is the signal that the round is settled
+ *                  and its owner leads the next one.
+ * Precedence when several are set: selected › won › active.
  * @param disabled  can't be played right now — dimmed and inert
  * @param size      'sm' | 'md' | 'lg'  (default 'md')
  * @param flipMs    length of the 3D flip (default 500)
@@ -122,6 +130,8 @@ export default function PlayingCard({
   suit = 'spades',
   faceDown = false,
   selected = false,
+  active = false,
+  won = false,
   disabled = false,
   size = 'md',
   flipMs = 500,
@@ -149,8 +159,11 @@ export default function PlayingCard({
       // that hadn't moved. On a phone you aim at what you SEE, so taps landed in the
       // gap or on the neighbouring card: the "double tap / selects the wrong card"
       // problem. Transform doesn't affect layout, so the fan doesn't reflow.
+      // ONE lift class for both states, never two translate utilities on this element:
+      // Tailwind resolves a clash by stylesheet order, not source order, so a second
+      // one would silently win or lose (CLAUDE.md Trap 1).
       className={`group relative block shrink-0 ${s.box} ${s.radius} transition-transform duration-150 ease-[cubic-bezier(0.34,1.4,0.64,1)] ${
-        selected ? s.lift : ''
+        selected || active || won ? s.lift : ''
       } ${disabled ? 'opacity-45' : interactive ? 'cursor-pointer' : ''} focus:outline-none ${className}`}
     >
       {/* Lift layer — the part that MOVES. Hover pops it up a little and scales it
@@ -174,9 +187,24 @@ export default function PlayingCard({
           // the face's dark border rather than behind it.
           // NOTE: the lift itself is on the BUTTON (see above) so the hit area
           // travels with it — only the scale/shadow/outline stay here.
+          //
+          // `active` deliberately breaks the inset rule above and sits OUTSIDE the
+          // card (`outline-offset-1`). The inset ring exists for the hand fan, where
+          // swelling a card laps its neighbours — but drawn inside, a yellow ring
+          // lands on the card's own WHITE face, which is the one background yellow
+          // cannot contrast against. Outside, it reads against the dark felt instead.
+          // Safe here because the active card is the newest play in its row, so it
+          // paints on top and nothing can cover its ring.
+          //
+          // The glow is folded into the single `shadow-[…]` value — two shadow
+          // utilities on one element collide (Trap 1).
           selected
             ? `scale-[1.04] shadow-[0_10px_16px_rgba(0,0,0,0.45)] outline-3 -outline-offset-3 outline-[#FFD27A]`
-            : 'shadow-[0_3px_7px_rgba(0,0,0,0.4)]'
+            : won
+              ? `scale-[1.04] shadow-[0_10px_16px_rgba(0,0,0,0.55),0_0_14px_3px_rgba(159,224,58,0.75)] outline-3 outline-offset-1 outline-[#9fe03a]`
+              : active
+                ? `scale-[1.04] shadow-[0_10px_16px_rgba(0,0,0,0.55),0_0_14px_3px_rgba(255,212,0,0.75)] outline-3 outline-offset-1 outline-[#FFD400]`
+                : 'shadow-[0_3px_7px_rgba(0,0,0,0.4)]'
         } ${interactive && !selected && !disabled ? '' : ''} ${
           interactive && !disabled ? '' : ''
         } group-focus-visible:ring-3 group-focus-visible:ring-white`}

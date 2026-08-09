@@ -1,6 +1,6 @@
 import Board from './Board.jsx'
 import { createMatch, applyPlay, applySkip } from './match.js'
-import { chooseBotMove } from './engine.js'
+import { chooseBotMoveElite } from './ai.js'
 
 // Teang Len (Cambodian/Vietnamese Tiến Lên) — the first game module, and the one
 // that shaped the contract in ../contract.js. See that file before adding a second.
@@ -30,7 +30,11 @@ export default {
   // the seat's own hand and the play on the table and returns the next state, so the
   // caller can relay it exactly like a human move. Null means "nothing to do".
   bot(state, seat) {
-    const move = chooseBotMove(state.hands[seat], state.current)
+    // `omniscient: false` is not optional here. This is AFK cover inside a REAL room,
+    // and `state.hands` carries every player's cards (trust model v1, see match.js) —
+    // an omniscient bot covering an absent seat would be reading a live opponent's
+    // hand to play against them. Solo-vs-bots opts in explicitly (Board.jsx).
+    const move = chooseBotMoveElite(state, seat, { omniscient: false })
     const res = move ? applyPlay(state, seat, move) : applySkip(state, seat)
     return res.error ? null : res.state
   },

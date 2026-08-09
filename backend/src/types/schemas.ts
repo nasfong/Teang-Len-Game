@@ -74,6 +74,10 @@ export const gamePlaySchema = z.object({
   finishedRank: z.number().int().optional(),
   gameOver: z.boolean().optional(),
   rankings: z.array(z.object({ playerId: z.string(), rank: z.number().int() })).optional(),
+  // A mid-hand bomb cut, settled immediately (Teang Len chặt). The client names only
+  // WHAT happened and to WHOM — never an amount; the server prices it from the room's
+  // bet and takes the payee from the emitting playerId.
+  bombCut: z.object({ kind: z.string().max(40), victimPlayerId: z.string() }).optional(),
 })
 
 export const gameSkipSchema = z.object({

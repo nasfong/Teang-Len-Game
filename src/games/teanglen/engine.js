@@ -16,7 +16,7 @@ const TWO = RANKS.indexOf('2')
 const rankIdx = (c) => RANKS.indexOf(c.rank)
 const suitIdx = (c) => SUITS.indexOf(c.suit)
 // One number that orders any two cards: rank dominates, suit breaks ties.
-const cardValue = (c) => rankIdx(c) * 4 + suitIdx(c)
+export const cardValue = (c) => rankIdx(c) * 4 + suitIdx(c)
 const cardId = (c) => `${c.rank}-${c.suit}`
 
 export const DEFAULT_FEATURES = {
@@ -108,11 +108,17 @@ export function classify(cards, features = DEFAULT_FEATURES) {
   if (n >= 4 && n % 2 === 0 && groups.length === n / 2 && groups.every((g) => g.cards.length === 2) && isConsecutive(rankIdxs) && !hasTwo(sorted)) {
     return play('double_sequence')
   }
-  // full house (fulu) — exactly a triple + a pair
-  if (features.allowFulu && n === 5 && groups.length === 2) {
+  // full house (fulu) — a triple + a pair on ADJACENT ranks: 333+44, 444+55, JJJ+QQ
+  // (either way round, so 44+333 is the same hand). NOT any triple with any pair —
+  // a cross like 555+KK is not a fulu. No 2 either, so A+2 can't sneak in on the
+  // rank order the way it would if adjacency alone were the test — the same reason
+  // straights and double sequences exclude 2s.
+  if (features.allowFulu && n === 5 && groups.length === 2 && !hasTwo(sorted)) {
     const triple = groups.find((g) => g.cards.length === 3)
     const pair = groups.find((g) => g.cards.length === 2)
-    if (triple && pair) return play('full_house', { tripleIdx: triple.rankIdx, pairIdx: pair.rankIdx })
+    if (triple && pair && Math.abs(triple.rankIdx - pair.rankIdx) === 1) {
+      return play('full_house', { tripleIdx: triple.rankIdx, pairIdx: pair.rankIdx })
+    }
   }
   // straight — ≥3 consecutive ranks, no 2
   if (n >= 3 && consecutiveRanks && !hasTwo(sorted)) return play('straight')
@@ -125,16 +131,24 @@ export function classify(cards, features = DEFAULT_FEATURES) {
 
 const isTwoCard = (c) => rankIdx(c) === TWO
 
-// A bomb cuts a specific target out of the normal type rules (§5).
-function isBomb(ch, cur, features) {
-  // square bomb: quad cuts a lone 2
-  if (features.allowSquareBomb && ch.type === 'quad' && cur.type === 'single' && isTwoCard(cur.top)) return true
-  // flush-straight bomb: exactly 5 cuts a lone 2
-  if (features.allowFlushStraightBomb && ch.type === 'flush_straight' && ch.count === 5 && cur.type === 'single' && isTwoCard(cur.top)) return true
-  // four-pair bomb: double sequence ≥8 cuts a pair of 2s
-  if (features.allowFourPairBomb && ch.type === 'double_sequence' && ch.count >= 8 && cur.type === 'pair' && isTwoCard(cur.top)) return true
-  return false
+// The three bomb cuts (§5). A bomb is defined by WHAT IT KILLS, so each kind names
+// the 2s it destroys — which is also what the chặt penalty is priced on, hence the
+// named constants rather than a bare boolean.
+export const BOMB_QUAD = 'quad' // four of a kind over a lone 2
+export const BOMB_FLUSH5 = 'flush_straight_5' // 5-card flush straight over a lone 2
+export const BOMB_FOUR_PAIRS = 'four_pairs' // 4+ consecutive pairs over a pair of 2s
+
+/** Which bomb cut `ch` makes on `cur`, or null if it isn't one (§5). */
+export function bombCut(ch, cur, features = DEFAULT_FEATURES) {
+  if (!ch || !cur) return null
+  if (features.allowSquareBomb && ch.type === 'quad' && cur.type === 'single' && isTwoCard(cur.top)) return BOMB_QUAD
+  if (features.allowFlushStraightBomb && ch.type === 'flush_straight' && ch.count === 5 && cur.type === 'single' && isTwoCard(cur.top)) return BOMB_FLUSH5
+  if (features.allowFourPairBomb && ch.type === 'double_sequence' && ch.count >= 8 && cur.type === 'pair' && isTwoCard(cur.top)) return BOMB_FOUR_PAIRS
+  return null
 }
+
+// A bomb cuts a specific target out of the normal type rules (§5).
+const isBomb = (ch, cur, features) => bombCut(ch, cur, features) !== null
 
 /** Does `ch` beat the `cur` hand on the table? (§4 evaluation order.) */
 export function canBeat(ch, cur, features = DEFAULT_FEATURES) {
@@ -198,7 +212,7 @@ const pickN = (cards, k, prefer) => {
 // Enumerate every legal play of a given type+count a hand can make. Drives both the
 // opponent's move and the player's smart selection. `prefer` (optional) biases
 // same-rank choices toward that card — see pickN.
-function playsOfType(hand, type, count, prefer = null) {
+export function playsOfType(hand, type, count, prefer = null) {
   const sorted = sortCards(hand)
   const groups = groupByRank(sorted)
   const out = []
@@ -207,9 +221,16 @@ function playsOfType(hand, type, count, prefer = null) {
   if (type === 'triple') return groups.filter((g) => g.cards.length >= 3).map((g) => pickN(g.cards, 3, prefer))
   if (type === 'quad') return groups.filter((g) => g.cards.length === 4).map((g) => g.cards)
   if (type === 'full_house') {
-    const triples = groups.filter((g) => g.cards.length >= 3)
-    const pairs = groups.filter((g) => g.cards.length >= 2)
-    for (const t of triples) for (const p of pairs) if (p.rankIdx !== t.rankIdx) out.push([...pickN(t.cards, 3, prefer), ...pickN(p.cards, 2, prefer)])
+    // Adjacent ranks only, and no 2 — see classify. Enforced here as well as there so
+    // the enumerator never offers a combination the classifier will just reject.
+    const triples = groups.filter((g) => g.cards.length >= 3 && g.rankIdx !== TWO)
+    const pairs = groups.filter((g) => g.cards.length >= 2 && g.rankIdx !== TWO)
+    for (const t of triples) {
+      for (const p of pairs) {
+        if (Math.abs(p.rankIdx - t.rankIdx) !== 1) continue
+        out.push([...pickN(t.cards, 3, prefer), ...pickN(p.cards, 2, prefer)])
+      }
+    }
     return out
   }
   if (type === 'straight' || type === 'flush_straight') {
@@ -247,7 +268,7 @@ function playsOfType(hand, type, count, prefer = null) {
  *  cross-type answers (a flush straight over a straight, bombs that cut 2s). Shared
  *  by the opponent AI and the player's smart selection so "what can answer this?"
  *  is defined in exactly one place. */
-function candidatePlays(hand, current, prefer = null) {
+export function candidatePlays(hand, current, prefer = null) {
   const out = playsOfType(hand, current.type, current.count, prefer)
   if (current.type === 'straight') out.push(...playsOfType(hand, 'flush_straight', current.count, prefer))
   if (current.type === 'single' && isTwoCard(current.top)) {
@@ -280,9 +301,19 @@ export function suggestSelection(hand, current, tapped, features = DEFAULT_FEATU
     .filter((cards) => cards.some((c) => c.id === tapped.id))
     .map((cards) => classify(cards, features))
     .filter((play) => play && canBeat(play, current, features))
-    .sort((a, b) => a.count - b.count || strength(a) - strength(b))
+    // Count first (smallest commitment), then SUITED before mixed, then weakest.
+    // The suited tie-break is the point: when the same cards can be read as either a
+    // plain straight or a same-suit one, the flush straight is the stronger hand for
+    // free — same cards, same count, but it also beats any mixed straight of that
+    // length. Ranked above `strength` because that would prefer the mixed run
+    // whenever its top card happened to be lower.
+    .sort((a, b) => a.count - b.count || suitedRank(b) - suitedRank(a) || strength(a) - strength(b))
   return beats.length ? beats[0].cards : null
 }
+
+// Suited runs sort ahead of mixed ones in smart-select. Only flush_straight can be
+// the "same cards, better hand" case — every other type is one reading or none.
+const suitedRank = (play) => (play.type === 'flush_straight' ? 1 : 0)
 
 /**
  * Pick a move for an opponent seat.
@@ -384,12 +415,15 @@ function combosWithAnchor(remaining, anchor, features) {
   }
   // full house (one meld instead of a separate triple + pair) — anchor as the triple,
   // or as half of the pair. The search decides whether it's worth spending the cards.
+  // The partner rank must be ADJACENT and not a 2 (see classify): the final filter
+  // would drop anything else anyway, this just stops generating it.
+  const fuluPartner = (r) => Math.abs(r - aRank) === 1 && r !== TWO && aRank !== TWO
   if (features.allowFulu) {
     if (sameRank.length >= 3) {
-      for (const [r, cards] of byRank) if (r !== aRank && cards.length >= 2) combos.push([anchor, ...others.slice(0, 2), ...cards.slice(0, 2)])
+      for (const [r, cards] of byRank) if (fuluPartner(r) && cards.length >= 2) combos.push([anchor, ...others.slice(0, 2), ...cards.slice(0, 2)])
     }
     if (sameRank.length >= 2) {
-      for (const [r, cards] of byRank) if (r !== aRank && cards.length >= 3) combos.push([anchor, others[0], ...cards.slice(0, 3)])
+      for (const [r, cards] of byRank) if (fuluPartner(r) && cards.length >= 3) combos.push([anchor, others[0], ...cards.slice(0, 3)])
     }
   }
   return combos.filter((cards) => classify(cards, features))
@@ -401,8 +435,17 @@ function combosWithAnchor(remaining, anchor, features) {
 const meldCost = (combo) => 1 + (combo.length === 1 && cardValue(combo[0]) < ORPHAN_BELOW ? 0.01 : 0)
 
 // Cache decompositions across the whole process — the same hand-shape recurs a lot
-// (leads, and every calm-follow candidate is scored on its resulting shape).
+// (leads, and every calm-follow candidate is scored on its resulting shape). The
+// elite AI's look-ahead hammers this, so it's capped: drop the oldest half when full
+// rather than growing without bound across a long session.
+const DECOMP_CACHE_MAX = 20000
 const _decompCache = new Map()
+function cacheDecomp(key, value) {
+  if (_decompCache.size >= DECOMP_CACHE_MAX) {
+    for (const k of [..._decompCache.keys()].slice(0, DECOMP_CACHE_MAX / 2)) _decompCache.delete(k)
+  }
+  _decompCache.set(key, value)
+}
 
 /**
  * Partition a hand into the fewest melds (a small memoized recursive search over the
@@ -432,7 +475,7 @@ export function decompose(cards, features = DEFAULT_FEATURES) {
     return best
   }
   const result = solve(sortCards(cards))
-  _decompCache.set(outerKey, result)
+  cacheDecomp(outerKey, result)
   return result
 }
 

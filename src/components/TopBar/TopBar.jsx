@@ -44,7 +44,7 @@ export default function TopBar({
       className={`flex h-12 w-full shrink-0 items-center gap-2.5 pr-[max(0.75rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))]  tall:h-14 tall:gap-3 ${className}`}
     >
       {onBack && (
-        <Button shape="circle" size="sm" variant="blue" outline="navy" aria-label="Back" onClick={onBack}c>
+        <Button shape="circle" size="sm" variant="blue" outline="navy" aria-label="Back" onClick={onBack}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
             <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
           </svg>

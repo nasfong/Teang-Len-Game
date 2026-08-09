@@ -4,10 +4,11 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '../types/events'
 import { gamePlaySchema, gameSkipSchema, gameStartSchema } from '../types/schemas'
 import type { Ranking, Settlement } from '../types'
 import { getGame } from '../config/games'
-import { settle } from '../modules/wallet/walletService'
+import { getWallet, settle } from '../modules/wallet/walletService'
 import * as roomService from '../services/roomService'
 import {
   broadcastGameEnd,
+  broadcastGamePenalty,
   broadcastGameUpdate,
   broadcastLobbyUpdate,
   broadcastPlayerFinished,
@@ -61,6 +62,9 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
 
     broadcastGameUpdate(io, room.roomId, room.gameState, room.version, data.playerId, turnStartedAt)
 
+    // chặt — settled the moment it happens, before any end-of-hand pot.
+    if (data.bombCut) applyBombPenalty(io, room.roomId, data.playerId, data.bombCut)
+
     if (data.playerFinished) {
       const finished = roomService.markPlayerFinished(room.roomId, data.playerId)
       if (finished.ok) broadcastPlayerFinished(io, room.roomId, data.playerId, finished.data.rank)
@@ -92,6 +96,50 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     const turnStartedAt = startTurnTimer(io, room.roomId, room.turnDurationMs) ?? undefined
     broadcastGameUpdate(io, room.roomId, room.gameState, room.version, data.playerId, turnStartedAt)
   })
+}
+
+// Pay an instant bomb penalty (Teang Len chặt): the owner of the 2 that was cut pays
+// the bomber on the spot, mid-hand, instead of waiting for the placement payout.
+//
+// The client asserts only WHICH cut happened and WHO owned the murdered card — the
+// same trust level as `rankings`. Everything that decides money is server-side: the
+// multiplier comes from the game definition, the amount from the room's bet, and the
+// payee is the emitting player, so a payload can never redirect a transfer to a third
+// party. Unknown kinds, free tables and games with no schedule are silent no-ops.
+//
+// Clamped to what the victim actually holds so the transfer stays zero-sum: the bomber
+// receives exactly what was taken, never conjured coins (walletService.settle floors a
+// balance at 0, so an unclamped pair would mint the difference).
+function applyBombPenalty(
+  io: Server,
+  roomId: string,
+  bomberPlayerId: string,
+  cut: { kind: string; victimPlayerId: string },
+): void {
+  const room = roomService.get(roomId)
+  if (!room || room.betCoin <= 0) return
+  if (cut.victimPlayerId === bomberPlayerId) return
+
+  const multiplier = getGame(room.gameCode).bombPenalties?.[cut.kind]
+  if (!multiplier || multiplier <= 0) return
+
+  // Both must be seated in this room — no paying out to someone who has left.
+  const seated = new Set(room.players.map((p) => p.playerId))
+  if (!seated.has(cut.victimPlayerId) || !seated.has(bomberPlayerId)) return
+
+  const owed = Math.round(multiplier * room.betCoin)
+  const amount = Math.min(owed, getWallet(cut.victimPlayerId).coin)
+  if (amount <= 0) return
+
+  settle(cut.victimPlayerId, -amount)
+  settle(bomberPlayerId, amount)
+  broadcastGamePenalty(io, roomId, {
+    kind: cut.kind,
+    fromPlayerId: cut.victimPlayerId,
+    toPlayerId: bomberPlayerId,
+    amount,
+  })
+  broadcastRoomUpdate(io, room) // seat balances changed mid-hand
 }
 
 // Placement payouts as multiples of the bet, by player count. Zero-sum: the

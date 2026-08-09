@@ -11,7 +11,7 @@ export function register({ username, password }) {
   return apiFetch('/api/auth/register', { method: 'POST', auth: false, body: { username, password } })
 }
 
-/** @param mode {'login' | 'register'} — AuthForm reports which one the user picked. */
+/** @param mode {'login' | 'register'} — what AuthForm reports. */
 export function authenticate({ mode, username, password }) {
   return mode === 'register' ? register({ username, password }) : login({ username, password })
 }

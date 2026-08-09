@@ -17,8 +17,10 @@ API_IMAGE    ?= $(REGISTRY)/teang-len-api
 TAG          ?= production
 PLATFORM     ?= linux/amd64
 
-# Baked into the web bundle at BUILD time (Vite inlines it). MUST point at the
-# deployed API origin — the web build fails if this is left unset/empty.
+# The web image's DEFAULT API origin. A container overrides it at run time:
+#   docker run -p 8080:80 -e API_URL=https://api.example.com $(WEB_IMAGE):$(TAG)
+# entrypoint.sh writes it into /config.js on start, so repointing a deployment is an
+# env change + restart, not a rebuild.
 VITE_API_URL ?= https://teang-len-api.nasfong.com
 
 # Testing builds only: `true` auto-registers a throw-away account on first visit

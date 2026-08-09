@@ -48,18 +48,14 @@ pages/<Name>Screen.jsx  →  api/use<Domain>.js  →  services/<domain>.js  → 
    composition only        cache policy only      one fn per endpoint      fetch + envelope
 ```
 
-- A **page** holds no `fetch`, no query key and no cache call. If it grows past
-  composing components + calling hooks, the logic belongs in `features/<name>/`.
-- **`api/`** owns keys, staleness and invalidation — nothing else. Every key comes
-  from [api/keys.js](src/api/keys.js); never write `['wallet']` at a call site.
-- **`services/`** is plain async functions, callable outside React (that's how the
-  cold-boot room recovery and the auto-guest sign-in reuse them).
-- **`stores/`** is for state that outlives a screen (session, global error, invites).
-  Server data belongs in `api/`, and UI state belongs in the component.
+- A **page** holds no `fetch`, key or cache call. Outgrows composing? → `features/`.
+- **`api/`** owns keys/staleness/invalidation only. Keys come from
+  [api/keys.js](src/api/keys.js) — never write `['wallet']` at a call site.
+- **`services/`** is plain async fns, callable outside React (room recovery, auto-guest).
+- **`stores/`** is only state outliving a screen. Server data → `api/`, UI state → component.
 
-`src/pages/<Name>Screen.jsx` is the ROUTE; `src/components/<Name>Page/` is a
-presentational layout the route renders. Different things, hence the different
-suffixes — don't collapse them.
+`pages/<Name>Screen.jsx` is the ROUTE; `components/<Name>Page/` is a presentational
+layout it renders. Don't collapse the two.
 
 **Art ownership — ask who owns it, not where it's used:**
 - **Component's** → its folder (`AuthForm/icon_user.png`, `Table/table-background.png`).
@@ -85,6 +81,7 @@ suffixes — don't collapse them.
 | `EmoteBubble` | emoji over a profile, self-dismissing, absolute |
 | `TurnTimer` | countdown ring |
 | `Notice` | the one message pill. `tone` error/success/neutral, `size` sm/md/lg. Never positions itself — wrap it |
+| `PhaseBanner` | "a new phase started" caption for a felt centre. `event` ({ id, icon, title, note }), self-dismissing, absolute, never blocks a tap |
 
 **Composite** — imports siblings, so copying it out means bringing those folders too
 (the documented exception to the no-outside-imports rule).
@@ -114,7 +111,7 @@ not an engine.
 
 | game | rules |
 | --- | --- |
-| `teanglen` | Teang Len / Tiến Lên — shedding, combos, tricks, ranks every finisher |
+| `teanglen` | Teang Len / Tiến Lên — shedding, combos, tricks, ranks every finisher. **chặt**: a bomb cutting a 2 is paid INSTANTLY by that 2's owner (`state.lastPenalty` → `deriveFlags().bombCut` → server `applyBombPenalty`), not folded into the placement payout |
 | `kanteal` | Kanteal (កន្ទេល) — one card per turn, cycles, elimination, one winner. 2–8 players. NO central pile: played cards stay in front of their owner all game (`Table`'s `playAreas`). §6 successful-beat rule: you must WIN a completed cycle before you may finish — reaching ≤2 cards with none (`successfulBeats[seat] === 0`) cuts you; a beat that's beaten back counts for nothing (banked at cycle end, see `failsBeatGate`) |
 
 ### Identifiers — say which one you mean
@@ -126,9 +123,7 @@ not an engine.
 | `playerId` | one user, durable across reconnects |
 | `seatIndex` | a seat's position at a table — positional, not an identity |
 
-Don't reintroduce a bare `id` for any of these; `id` alone never says which. (The one
-remaining exception is a component's own local key, e.g. `GameTable`'s `dealId` deal
-counter — local state, never on the wire.)
+Don't reintroduce a bare `id` for any of these — `id` alone never says which.
 
 A game module exports one object: `meta`, `createMatch`, `Board`, `bot`, `summarize`
 (see [src/games/contract.js](src/games/contract.js)). **Keep the interface this small** —
@@ -151,6 +146,15 @@ Two properties not to break:
    *authority* for seat counts, turn duration, rule variations (anything a client could
    forge). The client `catalogue` only lets the lobby list games without downloading them.
 4. Nothing else — rooms/seats/presence/host-transfer/AFK/spectators are game-agnostic.
+
+Teang Len has three bots, weakest first: `chooseBotMove` (greedy), `chooseBotMovePro`
+(hand-decomposition heuristics) — both in `engine.js` — and `chooseBotMoveElite` in
+**[games/teanglen/ai.js](src/games/teanglen/ai.js)**, the strategic layer (turns-to-empty,
+break cost, opponent modelling, phase switching, debug trace). ai.js decides only WHAT
+to play; legality stays in engine.js and every simulated move goes through `match.js`.
+`omniscient: false` is **required** for AFK cover in a real room — `state.hands` holds
+every player's cards. Measured with `node src/games/teanglen/verify-ai.mjs`: elite
+crushes greedy and is **tied** with pro (−0.012 ± 0.039 places over 2000 paired deals).
 
 A rules engine earns a **verification script**: `node src/games/kanteal/verify.mjs` walks
 the spec section by section, then soaks the state machine with random games (every game
@@ -259,9 +263,17 @@ in the `-webkit-text-stroke` shorthand silently fails to parse).
 | `animate-pop-in` | HintBubble, Modal |
 | `animate-fade-in` | Modal backdrop |
 | `animate-countdown` (+ `--turn-duration`) | TurnTimer |
+| `animate-winner-glow` | Table (winning seat + winning challenge stack) |
+| `animate-announce` (+ `-glow`, `-sheen`, `announce-plain`) | PhaseBanner |
 
-`pop-in`/`fade-in` collapse to 1ms under `prefers-reduced-motion`; `countdown` deliberately
-does NOT — it's information, not decoration.
+`pop-in`/`fade-in` collapse to 1ms under `prefers-reduced-motion`; `countdown`,
+`winner-glow` and `announce` deliberately do NOT — they carry meaning. `countdown` keeps
+running, `winner-glow` snaps to its resting glow, `announce` swaps to a **still twin**
+keyframe. Use a twin, not 1ms, whenever an animation ends invisible.
+
+**Duration from the element, not the token** (`countdown`, `announce`): a `var()` in the
+token resolves against `:root` and freezes at the fallback, so the token sets only
+name/easing/fill and the keyframes are in **percentages**.
 
 ## Sizing
 
@@ -277,8 +289,8 @@ AuthForm lack it — render those on their own, or add it the same way.
 
 ## Adding a screen — copy the table
 
-[pages/TableScreen.jsx](src/pages/TableScreen.jsx) is the reference implementation.
-It reads top-to-bottom as composition; everything it used to inline sits beside it:
+[pages/TableScreen.jsx](src/pages/TableScreen.jsx) is the reference implementation —
+composition only, with everything it used to inline beside it:
 
 | | |
 | --- | --- |
@@ -288,13 +300,12 @@ It reads top-to-bottom as composition; everything it used to inline sits beside 
 | [features/table/useRoomChannel.js](src/features/table/useRoomChannel.js) | the room's socket link |
 
 The rules that generalise:
-- **Slots, not props-for-everything.** `TableLayout` takes `hudLeft`/`hudRight` nodes.
-  The wrapper owns the positioning so a caller never passes a position class down
-  (Trap 1 — `Button`'s root is `relative`, and an `absolute` handed to it is dropped).
-- **A screen's cohesive lump becomes a hook in `features/`**, named for the behaviour
-  (`useLeaveTable`), not for the screen.
-- **Chrome shared by two screens becomes a `features/<name>/<Name>Layout.jsx`** — not a
-  `components/` entry, since it knows about safe areas and app data and isn't portable.
+- **Slots, not props-for-everything** — `hudLeft`/`hudRight` take nodes, and the wrapper
+  owns the positioning so no position class is ever passed down (Trap 1).
+- **A cohesive lump becomes a hook in `features/`**, named for the behaviour
+  (`useLeaveTable`), not the screen.
+- **Chrome shared by two screens → `features/<name>/<Name>Layout.jsx`**, not
+  `components/` — it knows about safe areas and app data, so it isn't portable.
 
 ## Adding a component
 1. `src/components/<Name>/<Name>.jsx` (default export), assets in the folder.
@@ -315,6 +326,22 @@ grep -o "\.animate-countdown{[^}]*}" dist/assets/index-*.css
 ```
 Do this for any arbitrary variant, custom property, pseudo-element, or keyframe.
 **Don't rebuild after every edit** — build when you've used a mechanism worth verifying.
+
+## Config
+
+Read every deploy-time setting from [services/config.js](src/services/config.js), never
+`import.meta.env` at a call site. It prefers `window.APP_CONFIG` (written into
+`public/config.js` by `entrypoint.sh` at container start) over the Vite-inlined `VITE_*`,
+so one image serves any environment — `docker run -e API_URL=…`. Adding a setting means
+touching three files: `config.js`, `entrypoint.sh`, `.env`.
+
+**`DEBUG_PEEK`** draws every opponent's hand face-up and dimmed (`docker run -e
+DEBUG_PEEK=true`, or `VITE_DEBUG_PEEK` for dev). Runtime-only — deliberately not a
+Dockerfile build arg, so it can't be baked into a shared image. It exposes nothing new:
+the relayed `gameState` already carries every hand (trust model v1), so this only stops
+hiding it — which is exactly why a build with it on is unfair to real players. A table
+running with it wears a red PEEK badge. Boards take it as a `peek` prop (like `bots`);
+games never import `services/`.
 
 ## Commands
 - `npm run dev` — workbench with HMR

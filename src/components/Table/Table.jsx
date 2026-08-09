@@ -24,9 +24,12 @@ const rankBadge = (rank) => (rank >= 1 && rank <= MEDALS.length ? MEDALS[rank - 
 // the trick pile and the hand place independently. `opponentHands` (a node per
 // seat, seat 0 skipped) tucks each opponent's face-down hand by their seat, and
 // `playAreas` (a node per seat, seat 0 INCLUDED) puts cards a player has already
-// played in front of them — for games with no central discard pile. A
-// player's `emote` ({ id, emoji }) pops over their profile and clears itself.
-// Uses font-display.
+// played in front of them — for games with no central discard pile.
+// `challengeAreas` (a node per seat) is the inner-ring slot for an endgame showdown;
+// `challengeSeats` (a bool per seat) says which seats are IN it — separate, since a
+// seat can be in it before it has anything to show. A seat flagged `winner` haloes
+// both its avatar and its challenge stack. A player's `emote` ({ id, emoji }) pops
+// over their profile and clears itself. Uses font-display.
 //
 // The art is a real <img>, not a Tailwind bg-[url(…)] class: Vite hashes the
 // filename at build time, and Tailwind can only read class strings that are
@@ -153,18 +156,22 @@ function challengeSpot(seat, seats, ring) {
   }
 }
 
-const PLAY_RING = { rx: 45, ry: 44 }
+// The PREVIEW ring — where a seat's own played cards sit when that seat is NOT in a
+// challenge: out at the seat's own edge of the felt, read at a glance rather than
+// compared card-for-card. The tighter CHALLENGE_RING pulls a row in to the centre
+// when its cards are actually being contested.
+const PREVIEW_RING = { rx: 45, ry: 44 }
 
-function playAngle(seat, seats, ring) {
+function previewAngle(seat, seats, ring) {
   if (!ring) return 120 - 90 * seat
   return seat === 0 ? 90 : ringAngle(seat - 1, seats - 1)
 }
 
-function playSpot(seat, seats, ring) {
-  const a = (playAngle(seat, seats, ring) * Math.PI) / 180
+function previewSpot(seat, seats, ring) {
+  const a = (previewAngle(seat, seats, ring) * Math.PI) / 180
   return {
-    left: `${50 + PLAY_RING.rx * Math.cos(a)}%`,
-    top: `${50 + PLAY_RING.ry * Math.sin(a)}%`,
+    left: `${50 + PREVIEW_RING.rx * Math.cos(a)}%`,
+    top: `${50 + PREVIEW_RING.ry * Math.sin(a)}%`,
   }
 }
 
@@ -298,7 +305,7 @@ function PlayerSeat({ name = 'Player', coin, avatarSrc, host = false, active = f
   )
 }
 
-export default function Table({ players = DEFAULT_PLAYERS, currentTurn = 0, turnSeconds, turnKey, onTurnExpire, children, hand, opponentHands = [], playAreas = [], fill = false, className = '', challengeAreas = [] }) {
+export default function Table({ players = DEFAULT_PLAYERS, currentTurn = 0, turnSeconds, turnKey, onTurnExpire, children, hand, opponentHands = [], playAreas = [], fill = false, className = '', challengeAreas = [], challengeSeats = [] }) {
   // `fill` drops the fixed 860px / fixed-aspect box and fills the parent instead —
   // for a full-screen table on a phone, where the board IS the page (see TablePage).
   // The felt art object-covers either way; the seat percentages still sit at the
@@ -389,36 +396,66 @@ export default function Table({ players = DEFAULT_PLAYERS, currentTurn = 0, turn
         ) : null
       })}
 
-      {/* Played cards that stay in front of their owner (see PLAY_RING). Indexed by
-          seat like `players`, and INCLUDING seat 0 — the local player's own history
-          belongs on the table too. The page builds the nodes, so Table still imports
-          no card component. A seat that's in the challenge (its `challengeAreas` slot
-          is filled) has its row pulled in toward the felt centre; everyone else sits
-          on the normal play ring. */}
+      {/* Played cards that stay in front of their owner (seat 0 included — the page
+          builds the nodes, so Table imports no card component).
+
+          TWO RINGS: while a seat is just playing its row sits on the inner
+          CHALLENGE_RING; once it enters the challenge the stack needs that spot, so
+          the row slides OUT to PREVIEW_RING.
+
+          `challengeSeats[i]` drives the MOVE, `challengeAreas[i]` is what to DRAW —
+          separate, because a seat is in the challenge before its owner commits and
+          the row must vacate early rather than jump aside later. Falls back to the
+          node so a game passing only `challengeAreas` still works. */}
       {playAreas.slice(0, seated.length).map((node, i) => {
         if (!node) return null
-        const isChallenge = Boolean(challengeAreas[i])
+        const isChallenge = challengeSeats[i] ?? Boolean(challengeAreas[i])
         return (
           <div
             key={i}
-            // `left`/`top` are what changes when the seat flips in/out of the challenge,
-            // so transitioning just those two slides the whole row between its play spot
-            // and the pulled-in challenge spot. The centring transform stays static.
+            // Only left/top change, so transitioning those slides the row outward;
+            // the centring transform stays static.
             className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-[left,top] duration-500 ease-out"
-            style={!isChallenge ? challengeSpot(i, seated.length, ring) : playSpot(i, seated.length, ring)}
+            style={isChallenge ? previewSpot(i, seated.length, ring) : challengeSpot(i, seated.length, ring)}
           >
             {node}
           </div>
         )
       })}
-
-      {challengeAreas.slice(0, seated.length).map((node, i) =>
-        node ? (
-          <div key={i} className="absolute z-10 -translate-x-1/2 -translate-y-1/2" style={challengeSpot(i, seated.length, ring)}>
+      
+      {/* The challenge stacks, on the inner ring the play rows vacated. The winner's
+          gets a slim lime outline — the seat's crown/halo is easy to miss out on the
+          rim, and lime rather than gold because gold is already the coin/bet colour. */}
+      {challengeAreas.slice(0, seated.length).map((node, i) => {
+        if (!node) return null
+        const won = Boolean(seated[i]?.winner)
+        return (
+          <div
+            key={i}
+            // `flex` is load-bearing: ChallengeStack's root is an inline-block, and a
+            // block wrapper sits it on a text baseline, adding the font's descender gap
+            // underneath. The outline below is a % of THIS box, so that phantom strip
+            // pushed its bottom edge clear of the cards. Flex reserves no baseline.
+            // z-20 keeps the winner's outline from being clipped by a neighbour.
+            className={`absolute flex -translate-x-1/2 -translate-y-1/2 ${won ? 'z-20' : 'z-10'}`}
+            style={challengeSpot(i, seated.length, ring)}
+          >
+            {/* Absolute sibling so it can't nudge the cards, and ABOVE them (this tight
+                a border would otherwise be hidden behind them). Bottom is `40% + 2px`:
+                ChallengeStack translates the held card 40% of a card height below the
+                box it measures, so a symmetric inset would cut across it. Separate
+                sides, never `-inset-*` plus `-bottom-*` — same property, and Tailwind
+                resolves the clash by stylesheet order (Trap 1). */}
+            {won && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -top-0.5 -inset-x-0.5 -bottom-[calc(40%+2px)] z-20 rounded-md border-2 border-[#9fe03a] shadow-[0_0_12px_rgba(159,224,58,0.65)] motion-safe:animate-pulse"
+              />
+            )}
             {node}
           </div>
-        ) : null,
-      )}
+        )
+      })}
 
       {/* Local player's hand — its own slot along the front rim, centred across
           the full width because the You seat vacated the middle. z-20 so the fan

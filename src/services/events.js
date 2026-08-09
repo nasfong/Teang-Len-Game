@@ -21,6 +21,7 @@ export const SERVER_EVENTS = {
   TURN_UPDATE: 'turn:update',
   TURN_TIMEOUT: 'turn:timeout',
   PLAYER_FINISHED: 'player:finished',
+  GAME_PENALTY: 'game:penalty',
   GAME_END: 'game:end',
   PLAYER_DISCONNECTED: 'player:disconnected',
   FRIENDS_UPDATE: 'friends:update',

@@ -39,6 +39,11 @@ export interface GameDefinition {
   maxPlayers: number
   turnDurationMs: number
   payout: PayoutModel
+  // Instant mid-hand penalties, as multiples of the room's bet, keyed by the game's
+  // own event name. Teang Len's chặt: cutting a 2 with a bomb is paid on the spot by
+  // the owner of that 2, not folded into the placement payout. Absent → the game has
+  // no mid-hand transfers and any claim of one is ignored.
+  bombPenalties?: Record<string, number>
   rules: GameRules
 }
 
@@ -50,6 +55,14 @@ export const games: Record<string, GameDefinition> = {
     maxPlayers: 4,
     turnDurationMs: 15_000,
     payout: 'placement',
+    // §5 bomb cuts. Four consecutive pairs kills a PAIR of 2s, so it prices double.
+    // The client mirrors this for display only (src/games/teanglen/match.js) — these
+    // numbers are the authority.
+    bombPenalties: {
+      quad: 1,
+      flush_straight_5: 1,
+      four_pairs: 2,
+    },
     rules: defaultRules,
   },
   kanteal: {

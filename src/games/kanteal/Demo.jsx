@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Table from '../../components/Table/Table.jsx'
 import Hand from '../../components/Hand/Hand.jsx'
 import Button from '../../components/Button/Button.jsx'
+import PhaseBanner from '../../components/PhaseBanner/PhaseBanner.jsx'
 import Centre from './Centre.jsx'
 import ChallengeStack from './ChallengeStack.jsx'
 import PlayArea from './PlayArea.jsx'
@@ -38,6 +39,15 @@ const BOT_DELAY_MS = 900
 // commit, reveal — pushes exactly one entry, so this index holds whatever mix of
 // plays and passes got the seat here.
 const CHALLENGE_FROM = 4
+
+// "FINAL" because Kanteal also has a §7 `challenge` on one card mid-cycle
+// (Centre.jsx). Mirrors Board.jsx.
+const CHALLENGE_EVENT = {
+  id: 'final-challenge',
+  icon: '⚔️',
+  title: 'FINAL CHALLENGE',
+  note: 'Commit your last two cards',
+}
 
 const cardLabel = (c) => (c ? `${c.rank}${SUIT_MARK[c.suit]}` : '')
 
@@ -104,11 +114,26 @@ export default function KantealDemo({ fill = false, className = '' }) {
   const SEATS = gs.seats
   const n = SEATS.length
 
-  // A "finalist" reached the two-card final challenge: not cut, and past its fourth
-  // played card (i.e. it has committed). Cut ("teav") seats also end with a full row —
-  // their leftover cards are dumped face-down into `played` — so the `eliminated`
-  // guard is what keeps them out of the challenge split and in the normal play row.
-  const isFinalist = (i) => !gs.eliminated[i] && (gs.played[i]?.length ?? 0) > CHALLENGE_FROM
+  // TABLE-WIDE: opens when the LAST seat still in the game lays its fourth card. Cut
+  // ("teav") seats excluded — their leftovers land in `played` and would open it early.
+  // Mirrors Board.jsx.
+  const contenders = SEATS.map((_, i) => i).filter((i) => !gs.eliminated[i])
+  const challengeOpen =
+    contenders.length > 0 && contenders.every((i) => (gs.played[i]?.length ?? 0) >= CHALLENGE_FROM)
+
+  const isFinalist = (i) => challengeOpen && !gs.eliminated[i]
+
+  // A fifth `played` entry. Not `commits[i] != null` — the engine clears that on the
+  // reveal, and the stack must survive it (mirrors Board.jsx).
+  const hasCommitted = (i) => (gs.played[i]?.length ?? 0) > CHALLENGE_FROM
+
+  // The round's winner, flagged green once the table clears — mirrors Board.jsx.
+  const lastFaceUpId = (seat) => {
+    const row = gs.played[seat] ?? []
+    for (let i = row.length - 1; i >= 0; i--) if (row[i].card) return row[i].card.id
+    return null
+  }
+  const wonId = gs.phase === 'playing' && !gs.table ? lastFaceUpId(gs.opener) : null
 
   function deal(count = seatCount) {
     setSeatCount(count)
@@ -130,9 +155,9 @@ export default function KantealDemo({ fill = false, className = '' }) {
   // seat's REMAINING cards turn face-up — the standard reveal (mirrors Board.jsx).
   const opponentHands = SEATS.map((_, i) => {
     if (i === HUMAN) return null
-    // Finalists are drawn as their challenge stack (see `challengeAreas`); their only
-    // remaining card is the hidden Round-2 card, so no hand blob beside the seat.
-    if (!over && isFinalist(i)) return null
+    // A committed seat is drawn as its challenge stack instead. Gated on the commit, or
+    // a seat that hasn't chosen yet shows neither blob nor stack.
+    if (!over && hasCommitted(i)) return null
     if (!gs.hands[i].length) return null
     return over ? (
       <Hand key={i} cards={gs.hands[i]} size="xs" spread={0} curve={0} spacing={20} maxWidth={130} />
@@ -149,6 +174,7 @@ export default function KantealDemo({ fill = false, className = '' }) {
       key={i}
       played={isFinalist(i) ? gs.played[i].slice(0, CHALLENGE_FROM) : gs.played[i]}
       currentId={gs.table?.id ?? null}
+      wonId={wonId}
       label={i === HUMAN ? null : s.name}
       dense={n > 4}
     />
@@ -157,10 +183,15 @@ export default function KantealDemo({ fill = false, className = '' }) {
   // The final-challenge pair, pulled in toward the felt centre: the face-up Round-1
   // card on top, the held Round-2 card peeking behind it (flips face-up once revealed).
   const challengeAreas = SEATS.map((_, i) => {
-    if (!isFinalist(i)) return null
+    // Not committed yet — nothing public to draw (mirrors Board.jsx).
+    if (!isFinalist(i) || !hasCommitted(i)) return null
     const pair = gs.played[i].slice(CHALLENGE_FROM)
     return <ChallengeStack key={i} up={pair[0]?.card ?? null} down={pair[1]?.card ?? null} size="sm" />
   })
+
+  // Seats IN the challenge — drives the row move, independent of whether the stack
+  // is drawn yet (mirrors Board.jsx).
+  const challengeSeats = SEATS.map((_, i) => isFinalist(i))
 
   const hint = (() => {
     // "You wins!" — the local seat is literally named "You", so it needs its own
@@ -217,6 +248,7 @@ export default function KantealDemo({ fill = false, className = '' }) {
         opponentHands={opponentHands}
         playAreas={playAreas}
         challengeAreas={challengeAreas}
+        challengeSeats={challengeSeats}
         hand={
           <Hand
             cards={myHand}
@@ -239,6 +271,9 @@ export default function KantealDemo({ fill = false, className = '' }) {
         }
       >
         <Centre gs={gs} hint={message || hint} />
+        {/* Announces the final challenge, then clears itself. Suppressed once there's a
+            winner — the result owns the centre (mirrors Board.jsx). */}
+        <PhaseBanner event={challengeOpen && !over ? CHALLENGE_EVENT : null} />
       </Table>
 
       <div className="absolute right-3 bottom-3 z-20 flex flex-col gap-2">

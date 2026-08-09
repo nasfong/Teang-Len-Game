@@ -1,33 +1,19 @@
 import CoinIcon from '../../components/CoinIcon/CoinIcon.jsx'
+import { DEBUG_PEEK } from '../../services/config'
 
-// TableLayout — the screen chrome every table shares: the felt-room backdrop, the
+// TableLayout — the screen chrome both table screens share: felt-room backdrop, the
 // two safe-area HUD corners, the room/bet pill, and the full-bleed board layer.
+// Shared by TableScreen (online) and SoloTableScreen (bots), which used to hold
+// identical copies of all of it.
 //
-// WHY IT EXISTS: the multiplayer table (TableScreen) and the offline bot table
-// (SoloTableScreen) had byte-identical copies of all of this — the same root
-// classes, the same "Loading table…" panel, the same corner offsets, the same pill.
-// Two copies of screen chrome drift, and had already started to.
-//
-// NOT in src/components/: this is app-specific, not a portable leaf — it knows about
-// safe-area insets and the game/bet pill's contents. The portable prototype of this
-// idea is components/TablePage, which the workbench gallery still renders.
-//
-// SLOTS, NOT PROPS-FOR-EVERYTHING: `hudLeft` and `hudRight` take whatever nodes the
-// screen wants in each corner. The corner WRAPPERS own the positioning, so a caller
-// never passes a position class down (CLAUDE.md Trap 1 — Button's root is
-// `relative`, and an `absolute` handed to it is silently dropped).
-//
-// The board goes in `children` and is wrapped in `absolute inset-0`, which is what
-// gives it a real height: a plain min-h-app parent leaves size-full children at 0
-// (that was the blank-table bug).
+// Not in components/ — it's app-specific (safe-area insets, the bet pill), not a
+// portable leaf.
 
 const ROOM_SCREEN = 'relative isolate min-h-app w-full overflow-hidden bg-linear-to-b from-[#15324f] to-[#0a1a2b]'
-// Corner offsets: at least 0.75rem, more when the device's safe area demands it.
 const HUD_LEFT = 'absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-40'
 const HUD_RIGHT =
   'absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-40 flex items-center gap-2'
 
-/** The shared "still fetching the room / the game chunk" screen. */
 export function TableLoading() {
   return (
     <div className="flex min-h-app items-center justify-center bg-linear-to-b from-[#15324f] to-[#0a1a2b]">
@@ -37,18 +23,26 @@ export function TableLoading() {
 }
 
 /**
- * @param hudLeft   nodes for the top-left corner (Leave, Invite, status notes)
- * @param hudRight  nodes placed BEFORE the room pill (e.g. the spectator count)
- * @param gameCode    shown in the room pill
- * @param betCoin   shown in the room pill when > 0
- * @param children  the game board — stretched edge-to-edge under the HUD
+ * @param hudLeft   top-left corner nodes (Leave, Invite, status notes)
+ * @param hudRight  nodes placed BEFORE the room pill (e.g. spectator count)
+ * @param children  the game board
  */
 export default function TableLayout({ hudLeft, hudRight, gameCode, betCoin = 0, children }) {
   return (
     <div className={ROOM_SCREEN}>
+      {/* The corner wrappers own the positioning, so callers never pass a position
+          class to a Button (Trap 1). */}
       <div className={`${HUD_LEFT} flex flex-col items-start gap-1`}>{hudLeft}</div>
 
       <div className={HUD_RIGHT}>
+        {/* Impossible to miss, on purpose. A table where everyone can read everyone's
+            hand must never be mistaken for a normal one — this is the only thing
+            standing between a debug build and a silently unfair game. */}
+        {DEBUG_PEEK && (
+          <span className="rounded-full border border-[#ff7a7a] bg-[#7a1010] px-3 py-1 font-display text-xs tracking-wide text-white [--stroke-width:0]">
+            👁 PEEK — ALL HANDS VISIBLE
+          </span>
+        )}
         {hudRight}
         <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/45 px-4 py-1">
           <span className="max-w-40 truncate font-display text-sm text-white [--stroke-width:0]">{gameCode}</span>
@@ -60,6 +54,8 @@ export default function TableLayout({ hudLeft, hudRight, gameCode, betCoin = 0, 
         </div>
       </div>
 
+      {/* absolute inset-0 is what gives the board a real height — a plain min-h-app
+          parent leaves size-full children at 0. */}
       <div className="absolute inset-0">{children}</div>
     </div>
   )
